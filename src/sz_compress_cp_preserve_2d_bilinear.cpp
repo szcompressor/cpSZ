@@ -84,6 +84,7 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 	// 	1/(A0C1 - A1C0)	[-B0C1 + B1C0, -C1D0 + C0D1][x]	= y[x]
 	// 									[ A1B0 - A0B1,  A1D0 - A0D1][1]		 [1]
 	double A0C1_minus_A1C0 = A0*C1 - A1*C0;
+	if(A0C1_minus_A1C0 == 0) return 0;
 	double M[4] = {- B0*C1 + B1*C0, - C1*D0 + C0*D1, A1*B0 - A0*B1,  A1*D0 - A0*D1};
 	for(int i=0; i<4; i++){
 		M[i] /= A0C1_minus_A1C0;
@@ -93,6 +94,7 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 	// original trace
 	double tM = M[0] + M[3];
 
+	if((dM == 0) || (tM == 0)) return 0;
 	// A0C1 - A1C0 = - u1v0 + u2v0 + u0v1 - u3v1 - u0v2 + u3v2 + u1v3 - u2v3
 
 	// note: not dividing A0C1 - A1C0 in M
@@ -178,58 +180,130 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 			  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));
 		  }
 		  // keep sign of 1 - tM + dM
+		  // (- u1v0 + u2v0 + u0v1 - u3v1 - u0v2 + u3v2 + u1v3 - u2v3) ** 2 -
 		  // (-2 u1v0 + u2v0 + 2 u0v1 - u3v1 - u0v2 + u1v3) * (- u1v0 + u2v0 + u0v1 - u3v1 - u0v2 + u3v2 + u1v3 - u2v3)
-		  // = ?
-		  // (- u1v0 + u2v0 + u0v1 - u3v1 - u0v2 + u3v2 + u1v3 - u2v3) ** 2
-		  // = ?
+		  // + dM
+		  // = - u1u3v0v2 + u2u3v0v2 + u0u3v1v2 - u3u3v1v2 - u0u3v2v2 + u3u3v2v2 + u1u2v0v3 - u2u2v0v3 - u0u2v1v3
+			// 	+ u2u3v1v3 + u0u2v2v3 + u1u3v2v3 - 2 u2u3v2v3 - u1u2v3v3 + u2u2v3v3
 		  {
-		  	// double a = ;
-		  	// double b = ;
-		  	// double c = ;
-		  	// double d = ;
-		  	// double e = ;
-		  	// double f = ;
-		  	// if(f == 0) return 0;
-		  	// else if(f > 0){
-					// eb = MIN(eb, f / (fabs(d) + fabs(e)));
+		  	double a = u3*u3*v2*v2 - u3*u3*v1*v2;
+		  	double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
+		  	double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+		  	double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+		  	double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
+		  	double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
+										+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
+		  	// if(fabs(f/(A0C1_minus_A1C0*A0C1_minus_A1C0) - (1 - tM + dM)) > 1e-6){
+		  	// 	std::cout << f/(A0C1_minus_A1C0*A0C1_minus_A1C0) << " " << (1 - tM + dM) << std::endl;
 		  	// }
-		  	// else{
-
-		  	// }
+		  	// f > 0
+				// Min(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) > 0
+		  	if((a >= 0) && (b >= 0)){
+		  		eb = MIN(eb, max_eb_to_keep_sign_2d_online_gt0(a, b, c, d, e, f));
+		  	}
+		  	else if((a >= 0) && (b < 0)){
+		  		return 0;
+		  	}
+		  	else if((a < 0) && (b >= 0)){
+		  		return 0;
+		  	}
+		  	else{
+		  		// a<0 && b<0
+		  		// <=> Max(-a*e1^2 + -b*e2^2 + -c*e1e2 + -d*e1 + -e*e2 + -f) < 0
+		  		eb = MIN(eb, max_eb_to_keep_sign_2d_online_lt0(-a, -b, -c, -d, -e, -f));
+		  	}
 		  }
 		}
 		else if((dM < 0) && (1 - tM + dM < 0)){
-			return 0;
 			// have roots but no root in [0, 1] case 2
 			// f(0) < 0, f(1) < 0
 			// keep sign of dM
-		  double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
-		  double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
-		  double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
-		  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));
-		  // keep sign of 1 - tM + dM
-		  a -= - u3*v1;
-		  b -= u1*v3;
-		  c -= -2*u1*v0 + u2*v0 + 2*u0*v1 - u0*v2;
-		  c += 1;
-		  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));
+		  {
+			  double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
+			  double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
+			  double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
+			  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));		  	
+		  }
+			// keep sign of 1 - tM + dM
+		  {
+		  	double a = u3*u3*v2*v2 - u3*u3*v1*v2;
+		  	double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
+		  	double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+		  	double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+		  	double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
+		  	double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
+										+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
+		  	// if(fabs(f/(A0C1_minus_A1C0*A0C1_minus_A1C0) - (1 - tM + dM)) > 1e-6){
+		  	// 	std::cout << f/(A0C1_minus_A1C0*A0C1_minus_A1C0) << " " << (1 - tM + dM) << std::endl;
+		  	// }
+		  	// f < 0
+				// Max(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) < 0
+		  	if((a >= 0) && (b >= 0)){
+		  		eb = MIN(eb, max_eb_to_keep_sign_2d_online_lt0(a, b, c, d, e, f));
+		  	}
+		  	else if((a >= 0) && (b < 0)){
+		  		return 0;
+		  	}
+		  	else if((a < 0) && (b >= 0)){
+		  		return 0;
+		  	}
+		  	else{
+		  		// a<0 && b<0
+		  		// <=> Min(-a*e1^2 + -b*e2^2 + -c*e1e2 + -d*e1 + -e*e2 + -f) > 0
+		  		eb = MIN(eb, max_eb_to_keep_sign_2d_online_gt0(-a, -b, -c, -d, -e, -f));
+		  	}
+		  }
 		}
 		else{
-			return 0;
+			// return 0;
 			// dM * (1 - tM + dM) < 0
 			// one root in [0, 1]
 			// keep sign of dM
-		  double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
-		  double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
-		  double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
-		  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));
-		  // keep sign of 1 - tM + dM
-		  // tr(M) = -2 u1v0 + u2v0 + 2 u0v1 - u3v1 - u0v2 + u1v3
-		  a -= - u3*v1;
-		  b -= u1*v3;
-		  c -= -2*u1*v0 + u2*v0 + 2*u0*v1 - u0*v2;
-		  c += 1;
-		  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));
+		  {
+			  double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
+			  double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
+			  double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
+			  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));		  	
+		  }
+		  // keep sign of (1 - tM + dM)
+		  {
+		  	double a = u3*u3*v2*v2 - u3*u3*v1*v2;
+		  	double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
+		  	double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+		  	double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+		  	double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
+		  	double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
+										+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
+			  if(f > 0){
+			  	if((a >= 0) && (b >= 0)){
+			  		eb = MIN(eb, max_eb_to_keep_sign_2d_online_gt0(a, b, c, d, e, f));
+			  	}
+			  	else if((a >= 0) && (b < 0)){
+			  		return 0;
+			  	}
+			  	else if((a < 0) && (b >= 0)){
+			  		return 0;
+			  	}
+			  	else{
+			  		eb = MIN(eb, max_eb_to_keep_sign_2d_online_lt0(-a, -b, -c, -d, -e, -f));
+			  	}			  	
+			  }
+			  else{
+			  	if((a >= 0) && (b >= 0)){
+			  		eb = MIN(eb, max_eb_to_keep_sign_2d_online_lt0(a, b, c, d, e, f));
+			  	}
+			  	else if((a >= 0) && (b < 0)){
+			  		return 0;
+			  	}
+			  	else if((a < 0) && (b >= 0)){
+			  		return 0;
+			  	}
+			  	else{
+			  		eb = MIN(eb, max_eb_to_keep_sign_2d_online_gt0(-a, -b, -c, -d, -e, -f));
+			  	}			  	
+			  }
+
+		  }
 		}
 	}
 	return eb;
