@@ -3,6 +3,7 @@
 #include "sz_compress_cp_preserve_2d.hpp"
 #include "sz_def.hpp"
 #include "sz_compression_utils.hpp"
+#include <complex>
 
 // maximal error bound to keep the sign of A*(1 + e_1) + B*(1 + e_2) + C
 template<typename T>
@@ -14,126 +15,83 @@ static inline double max_eb_to_keep_sign_2d_online(const T A, const T B, const T
 
 // maximal error bound to keep the sign of 
 // a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
-// when f < 0, c = +/- 2ab
-static inline double max_eb_to_keep_sign_2d_online_lt0(const double a, const double b, const double c, const double d, const double e, const double f){
+// when f > 0
+static inline double max_eb_to_keep_sign_2d_online_corners_gt0(const double a, const double b, const double c, const double d, const double e, const double f){
 	double eb = 1;
-	// check four corners
 	{
-		// [-1, -1]
+		// [-t, -t]
+		// a*t^2 + b*t^2 + c*t^2 - d*t - e*t + f
 		double tmp_a = a + b + c;
 		double tmp_b = - d - e;
 		double tmp_c = f;
-		eb = MIN(eb, (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a));
+		double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
+		if(x > 0) eb = MIN(eb, x);
 	}
 	{
-		// [-1, 1]
+		// [-t, t]
 		double tmp_a = a + b - c;
 		double tmp_b = - d + e;
 		double tmp_c = f;
-		eb = MIN(eb, (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a));
+		double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
+		if(x > 0) eb = MIN(eb, x);
 	}
 	{
-		// [1, -1]
+		// [t, -t]
 		double tmp_a = a + b - c;
 		double tmp_b = d - e;
 		double tmp_c = f;
-		eb = MIN(eb, (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a));
+		double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
+		if(x > 0) eb = MIN(eb, x);
 	}
 	{
-		// [1, 1]
+		// [t, t]
 		double tmp_a = a + b + c;
 		double tmp_b = d + e;
 		double tmp_c = f;
-		eb = MIN(eb, (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a));
-	}			
+		double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
+		if(x > 0) eb = MIN(eb, x);
+	}					
 	return eb;
 }
 
 // maximal error bound to keep the sign of 
 // a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
-// when f > 0, c = +/- 2ab
-// = a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
-// > 0 - (|d| + |e|) e1 + f
-// > 0
-static inline double max_eb_to_keep_sign_2d_online_gt0(const double a, const double b, const double c, const double d, const double e, const double f){
-	return f / (fabs(d) + fabs(e));
-}
-
-// maximal error bound to keep the sign of 
-// a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
-// at corners 
-static inline double max_eb_to_keep_sign_2d_online_corners(const double a, const double b, const double c, const double d, const double e, const double f){
+// when f < 0
+static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, const double b, const double c, const double d, const double e, const double f){
 	double eb = 1;
-	if(f > 0){
-		{
-			// [-t, -t]
-			// a*t^2 + b*t^2 + c*t^2 - d*t - e*t + f
-			double tmp_a = a + b + c;
-			double tmp_b = - d - e;
-			double tmp_c = f;
-			double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-			if(x > 0) eb = MIN(eb, x);
-		}
-		{
-			// [-t, t]
-			double tmp_a = a + b - c;
-			double tmp_b = - d + e;
-			double tmp_c = f;
-			double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-			if(x > 0) eb = MIN(eb, x);
-		}
-		{
-			// [t, -t]
-			double tmp_a = a + b - c;
-			double tmp_b = d - e;
-			double tmp_c = f;
-			double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-			if(x > 0) eb = MIN(eb, x);
-		}
-		{
-			// [t, t]
-			double tmp_a = a + b + c;
-			double tmp_b = d + e;
-			double tmp_c = f;
-			double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-			if(x > 0) eb = MIN(eb, x);
-		}					
+	{
+		// [-t, -t]
+		// a*t^2 + b*t^2 + c*t^2 - d*t - e*t + f
+		double tmp_a = a + b + c;
+		double tmp_b = - d - e;
+		double tmp_c = f;
+		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
+		if(x > 0) eb = MIN(eb, x);
 	}
-	else{
-		{
-			// [-t, -t]
-			// a*t^2 + b*t^2 + c*t^2 - d*t - e*t + f
-			double tmp_a = a + b + c;
-			double tmp_b = - d - e;
-			double tmp_c = f;
-			double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-			if(x > 0) eb = MIN(eb, x);
-		}
-		{
-			// [-t, t]
-			double tmp_a = a + b - c;
-			double tmp_b = - d + e;
-			double tmp_c = f;
-			double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-			if(x > 0) eb = MIN(eb, x);
-		}
-		{
-			// [t, -t]
-			double tmp_a = a + b - c;
-			double tmp_b = d - e;
-			double tmp_c = f;
-			double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-			if(x > 0) eb = MIN(eb, x);
-		}
-		{
-			// [t, t]
-			double tmp_a = a + b + c;
-			double tmp_b = d + e;
-			double tmp_c = f;
-			double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-			if(x > 0) eb = MIN(eb, x);
-		}							
+	{
+		// [-t, t]
+		double tmp_a = a + b - c;
+		double tmp_b = - d + e;
+		double tmp_c = f;
+		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
+		if(x > 0) eb = MIN(eb, x);
 	}
+	{
+		// [t, -t]
+		double tmp_a = a + b - c;
+		double tmp_b = d - e;
+		double tmp_c = f;
+		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
+		if(x > 0) eb = MIN(eb, x);
+	}
+	{
+		// [t, t]
+		double tmp_a = a + b + c;
+		double tmp_b = d + e;
+		double tmp_c = f;
+		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
+		if(x > 0) eb = MIN(eb, x);
+	}							
 	return eb;
 }
 
@@ -149,11 +107,14 @@ static inline double max_eb_to_keep_sign_2d_online_general(const double a, const
 			// 2b * e2 + c * e1 + e = 0
 			double e1 = (-2*b*d + c*e) / (4*a*b - c*c);
 			double e2 = (-2*a*e + c*d) / (4*a*b - c*c);
-  		double eb = max_eb_to_keep_sign_2d_online_corners(a, b, c, d, e, f);
-  		if((fabs(e1) < eb) && (fabs(e2) < eb)) return 0;
+  		double eb = max_eb_to_keep_sign_2d_online_corners_gt0(a, b, c, d, e, f);
+  		if((fabs(e1) < eb) && (fabs(e2) < eb)){
+  			if(a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f > 0) return 1;
+  			else return 0;
+  		}
   		else return eb;
   	}
-  	else return max_eb_to_keep_sign_2d_online_corners(a, b, c, d, e, f);
+  	else return max_eb_to_keep_sign_2d_online_corners_gt0(a, b, c, d, e, f);
 	}
 	else{
 		// f < 0
@@ -164,56 +125,16 @@ static inline double max_eb_to_keep_sign_2d_online_general(const double a, const
 			// 2b * e2 + c * e1 + e = 0
 			double e1 = (-2*b*d + c*e) / (4*a*b - c*c);
 			double e2 = (-2*a*e + c*d) / (4*a*b - c*c);
-  		double eb = MIN(eb, max_eb_to_keep_sign_2d_online_corners(a, b, c, d, e, f));
-  		if((fabs(e1) < eb) && (fabs(e2) < eb)) return 0;
+  		double eb = MIN(eb, max_eb_to_keep_sign_2d_online_corners_lt0(a, b, c, d, e, f));
+  		if((fabs(e1) < eb) && (fabs(e2) < eb)){
+  			if(a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f < 0) return 1;
+  			else return 0;
+  		}
   		else return eb;
   	}
-  	else return max_eb_to_keep_sign_2d_online_corners(a, b, c, d, e, f);
+  	else return max_eb_to_keep_sign_2d_online_corners_lt0(a, b, c, d, e, f);
 	}
 }
-
-// maximal error bound to keep the sign of 
-// a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
-// static inline double max_eb_to_keep_sign_2d_online_general(const double a, const double b, const double c, const double d, const double e, const double f){
-// 	double eb = 1;
-// 	if(f > 0){
-//   	// f > 0
-// 		// Min(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) > 0
-//   	if((a >= 0) && (b >= 0)){
-//   		eb = MIN(eb, max_eb_to_keep_sign_2d_online_gt0(a, b, c, d, e, f));//???
-//   	}
-//   	else if((a >= 0) && (b < 0)){
-//   		return 0;
-//   	}
-//   	else if((a < 0) && (b >= 0)){
-//   		return 0;
-//   	}
-//   	else{
-//   		// a<0 && b<0
-//   		// <=> Max(-a*e1^2 + -b*e2^2 + -c*e1e2 + -d*e1 + -e*e2 + -f) < 0
-//   		eb = MIN(eb, max_eb_to_keep_sign_2d_online_lt0(-a, -b, -c, -d, -e, -f));
-//   	}		
-// 	}
-// 	else{
-// 		// f < 0
-// 		// Max(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) < 0
-//   	if((a >= 0) && (b >= 0)){
-//   		eb = MIN(eb, max_eb_to_keep_sign_2d_online_lt0(a, b, c, d, e, f));
-//   	}
-//   	else if((a >= 0) && (b < 0)){
-//   		return 0;
-//   	}
-//   	else if((a < 0) && (b >= 0)){
-//   		return 0;
-//   	}
-//   	else{
-//   		// a<0 && b<0
-//   		// <=> Min(-a*e1^2 + -b*e2^2 + -c*e1e2 + -d*e1 + -e*e2 + -f) > 0
-//   		eb = MIN(eb, max_eb_to_keep_sign_2d_online_gt0(-a, -b, -c, -d, -e, -f));
-//   	}
-// 	}
-// 	return eb;
-// }
 
 /*
 x1 - x2    rotate    x2 - x3
@@ -287,7 +208,7 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 		{
 			eb = MIN(eb, max_eb_to_keep_sign_2d_online(-u3*v1 + u3*v2, u1*v3 - u2*v3, -u1*v0 + u2*v0 + u0*v1 - u0*v2));
 		}
-		eb = MIN(eb, max_eb_to_keep_sign_2d_online_lt0(a, b, c, d, e, f));
+		eb = MIN(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
 	}		
 	else{
 		// tM * tM - 4*dM > 0
@@ -304,10 +225,7 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 			{
 				eb = MIN(eb, max_eb_to_keep_sign_2d_online(-u3*v1 + u3*v2, u1*v3 - u2*v3, -u1*v0 + u2*v0 + u0*v1 - u0*v2));
 			}
-			// = a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
-			// > 0 - (|d| + |e|) e1 + f
-			// > 0
-			// eb = MIN(eb, max_eb_to_keep_sign_2d_online_gt0(a, b, c, d, e, f));
+			// = a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f > 0
 			eb = MIN(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
 		}
 		// return eb;
@@ -408,7 +326,159 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 		  }
 		}
 	}
+	// need to check x and type
 	return eb;
+}
+
+int inverse_bilinear_interpolation(const double A0, const double B0, const double C0, const double D0,
+	const double A1, const double B1, const double C1, const double D1, double pos[2][2], double J[2][2][2])
+{
+  double M0[4] = {-B0, -D0, -B1, -D1}, // stored in row major
+    M1[4] = {A0, C0, A1, C1}; // (yM1 - M0)v = 0, v = {x, 1}^T
+
+  double detM1 = A0*C1 - A1*C0; // TODO: check if detM1==0
+  double invM1[4] = {C1/detM1, -C0/detM1, -A1/detM1, A0/detM1};  
+  // Q = invM1*M0
+  double Q[4] = {
+    invM1[0]*M0[0] + invM1[1]*M0[2], 
+    invM1[0]*M0[1] + invM1[1]*M0[3], 
+    invM1[2]*M0[0] + invM1[3]*M0[2], 
+    invM1[2]*M0[1] + invM1[3]*M0[3]
+  };
+  // compute y=eig(Q)
+  double trace = Q[0] + Q[3];
+  double det = Q[0]*Q[3] - Q[1]*Q[2];
+  double lambda[2] = {
+    static_cast<double>(trace/2 + std::sqrt(trace*trace/4 - det)), 
+    static_cast<double>(trace/2 - std::sqrt(trace*trace/4 - det))
+  }; 
+
+  double x[2] = {
+    (lambda[0]-Q[3])/Q[2], 
+    (lambda[1]-Q[3])/Q[2]
+  }; 
+  double y[2] = {
+    lambda[0], 
+    lambda[1]
+  };
+  int nroots = 0;
+  for (int i=0; i<2; i++) // check the two roots 
+    if (x[i]>=0 && x[i]<1 && y[i]>=0 && y[i]<1) {
+      pos[nroots][0] = x[i];
+      pos[nroots][1] = y[i];
+      J[nroots][0][0] = A0 * y[i] + B0;
+      J[nroots][0][1] = A0 * x[i] + C0;
+      J[nroots][1][0] = A1 * y[i] + B1;
+      J[nroots][1][1] = A1 * x[i] + C1;
+      nroots ++;
+    }
+  return nroots;
+}
+
+// copied from ftk
+template <typename T>
+static std::complex<T> complex_sqrt(const std::complex<T> z)
+{
+  return pow(z, T(1)/T(2));
+}
+template <typename T>
+inline T solve_quadratic(const T P[3], std::complex<T> x[2])
+{
+  const T delta = P[1]*P[1] - 4*P[2]*P[0];
+  if (delta >= 0) {
+    x[0] = (-P[1] + sqrt(delta)) / (2 * P[2]);
+    x[1] = (-P[1] - sqrt(delta)) / (2 * P[2]);
+  } else {
+    x[0] = (-P[1] + complex_sqrt<T>(delta)) / (2 * P[2]);
+    x[1] = (-P[1] - complex_sqrt<T>(delta)) / (2 * P[2]);
+  }
+  return delta;
+}
+template <typename T>
+inline T trace2(T A[2][2])
+{
+  return A[0][0] + A[1][1];
+}
+template <typename T>
+inline T det2(const T A[2][2])
+{
+  return A[0][0] * A[1][1] - A[1][0] * A[0][1];
+}
+template <typename T>
+void characteristic_polynomial_2x2(const T A[2][2], T P[3])
+{
+  P[2] = T(1);
+  P[1] = -trace2(A);
+  P[0] = det2(A);
+}
+template <typename T>
+inline T solve_eigenvalues2x2(const T M[2][2], std::complex<T> eig[2])
+{
+  T P[3];
+  characteristic_polynomial_2x2(M, P);
+  return solve_quadratic(P, eig); // returns delta
+}
+// copied from ftk end
+
+int get_cp_type(double delta, std::complex<double> eig[2]){
+	int cp_type = 0;
+  if (delta >= 0) { // two real roots
+    if (eig[0].real() * eig[1].real() < 0) {
+      cp_type = 3;
+    } else if (eig[0].real() < 0) {
+      cp_type = 1;
+    }
+    else if (eig[0].real() > 0){
+      cp_type = 2;
+    }
+    else cp_type = 0;
+  } else { // two conjugate roots
+    if (eig[0].real() < 0) {
+      cp_type = 4;
+    } else if (eig[0].real() > 0) {
+      cp_type = 5;
+    } else 
+      cp_type = 6;
+  }
+  return cp_type;
+}
+
+static bool 
+bilinear_verify_critical_point(const double u0, const double u1, const double u2, const double u3, const double u3_,
+			const double v0, const double v1, const double v2, const double v3, const double v3_){
+	// solve original
+	double A0 = u3 - u0 - u2 + u1;
+	double A0_ = u3_ - u0 - u2 + u1;
+	double B0 = u0 - u1;
+	double C0 = u2 - u1;
+	double D0 = u1;
+
+	double A1 = v3 - v0 - v2 + v1;
+	double A1_ = v3_ - v0 - v2 + v1;
+	double B1 = v0 - v1;
+	double C1 = v2 - v1;
+	double D1 = v1;
+
+	double pos[2][2], pos_[2][2];
+	double J[2][2][2], J_[2][2][2];
+
+	int num_root = inverse_bilinear_interpolation(A0, B0, C0, D0, A1, B1, C1, D1, pos, J);
+	int num_root_ = inverse_bilinear_interpolation(A0_, B0, C0, D0, A1_, B1, C1, D1, pos_, J_);
+
+	if(num_root != num_root_) return false;
+	else{
+		for(int i=0; i<num_root; i++){
+		  std::complex<double> eig[2];
+		  double delta = solve_eigenvalues2x2(J[i], eig);
+		  std::complex<double> eig_[2];
+		  double delta_ = solve_eigenvalues2x2(J_[i], eig_);
+		  if(delta * delta_ < 0) return false;
+		  if(eig[0].real() * eig_[0].real() < 0) return false;
+		  if(eig[1].real() * eig_[1].real() < 0) return false;
+		  if(get_cp_type(delta, eig) != get_cp_type(delta_, eig_)) return false;
+		}
+	}
+	return true;
 }
 
 template<typename T>
@@ -536,6 +606,29 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 						else{
 							unpred_flag = true;
 							break;
+						}
+					}
+					// do verification for x and critical point type
+					if(!unpred_flag){
+						double decompressed_u = (cur_U_pos[0] > 0) ? exp2(decompressed[0]) : -exp2(decompressed[0]);
+						double decompressed_v = (cur_V_pos[0] > 0) ? exp2(decompressed[1]) : -exp2(decompressed[1]);
+						for(int k=0; k<4; k++){
+							bool in_mesh = true;
+							for(int p=0; p<3; p++){
+								// reserved order!
+								// note: x and j are on r2, y and i are on r1
+								if(!(in_range(i + index_offset[k][p][1], (int)r1) && in_range(j + index_offset[k][p][0], (int)r2))){
+									in_mesh = false;
+									break;
+								}
+							}
+							if(in_mesh){
+								if(!bilinear_verify_critical_point(cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], cur_U_pos[0], decompressed_u,
+									cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], cur_V_pos[0], decompressed_v)){
+									unpred_flag = true;
+									break;
+								}
+							}
 						}
 					}
 				}
