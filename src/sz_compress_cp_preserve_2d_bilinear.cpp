@@ -348,6 +348,9 @@ int inverse_bilinear_interpolation(const double A0, const double B0, const doubl
   // compute y=eig(Q)
   double trace = Q[0] + Q[3];
   double det = Q[0]*Q[3] - Q[1]*Q[2];
+
+  if(trace*trace/4 - det < 0) return 0;
+
   double lambda[2] = {
     static_cast<double>(trace/2 + std::sqrt(trace*trace/4 - det)), 
     static_cast<double>(trace/2 - std::sqrt(trace*trace/4 - det))
@@ -443,40 +446,78 @@ int get_cp_type(double delta, std::complex<double> eig[2]){
   return cp_type;
 }
 
-static bool 
-bilinear_verify_critical_point(const double u0, const double u1, const double u2, const double u3, const double u3_,
-			const double v0, const double v1, const double v2, const double v3, const double v3_){
+/*
+x1 - x2    
+|    |     
+x0 - x3   
+No rotation to avoid wrong types
+*/
+static int 
+bilinear_extract_critical_point(const double u0, const double u1, const double u2, const double u3,
+			const double v0, const double v1, const double v2, const double v3, double J[2][2][2], bool verbose=false){
 	// solve original
-	double A0 = u3 - u0 - u2 + u1;
-	double A0_ = u3_ - u0 - u2 + u1;
-	double B0 = u0 - u1;
-	double C0 = u2 - u1;
-	double D0 = u1;
+  double 	A0 = u0 - u1 - u3 + u2,  // Axy + Bx + Cy + D = 0
+    			B0 = u1 - u0, 
+    			C0 = u3 - u0, 
+    			D0 = u0,
+    			A1 = v0 - v1 - v3 + v2, 
+    			B1 = v1 - v0, 
+    			C1 = v3 - v0, 
+    			D1 = v0; 
 
-	double A1 = v3 - v0 - v2 + v1;
-	double A1_ = v3_ - v0 - v2 + v1;
-	double B1 = v0 - v1;
-	double C1 = v2 - v1;
-	double D1 = v1;
-
-	double pos[2][2], pos_[2][2];
-	double J[2][2][2], J_[2][2][2];
-
+	double pos[2][2];
 	int num_root = inverse_bilinear_interpolation(A0, B0, C0, D0, A1, B1, C1, D1, pos, J);
-	int num_root_ = inverse_bilinear_interpolation(A0_, B0, C0, D0, A1_, B1, C1, D1, pos_, J_);
+	return num_root;
 
-	if(num_root != num_root_) return false;
-	else{
-		for(int i=0; i<num_root; i++){
-		  std::complex<double> eig[2];
-		  double delta = solve_eigenvalues2x2(J[i], eig);
-		  std::complex<double> eig_[2];
-		  double delta_ = solve_eigenvalues2x2(J_[i], eig_);
-		  if(delta * delta_ < 0) return false;
-		  if(eig[0].real() * eig_[0].real() < 0) return false;
-		  if(eig[1].real() * eig_[1].real() < 0) return false;
-		  if(get_cp_type(delta, eig) != get_cp_type(delta_, eig_)) return false;
+	// if(num_root != num_root_) return false;
+	// else{
+	// 	if(num_root){
+	// 		if(verbose){
+	// 			std::cout << u0 << " " << u1 << " " << u2 << " " << u3 << std::endl;
+	// 			std::cout << v0 << " " << v1 << " " << v2 << " " << v3 << std::endl;
+
+	// 			std::cout << A0 << " " << B0 << " " << C0 << " " << D0 << std::endl;
+	// 			std::cout << A1 << " " << B1 << " " << C1 << " " << D1 << std::endl;
+	// 		}			
+	// 	}
+	// 	for(int i=0; i<num_root; i++){
+	// 		if(verbose){
+	// 			std::cout << "x = " << pos[i][0] << ", y = " << pos[i][1] << std::endl;
+	// 			std::cout << "Jacobian = :\n";
+	// 			std::cout << J[i][0][0] << " " << J[i][0][1] << "\n" << J[i][1][0] << " " << J[i][1][1] << std::endl;
+	// 		}
+	// 	  std::complex<double> eig[2];
+	// 	  double delta = solve_eigenvalues2x2(J[i], eig);
+	// 	  std::complex<double> eig_[2];
+	// 	  double delta_ = solve_eigenvalues2x2(J_[i], eig_);
+	// 	  if(verbose){
+	// 	  	std::cout << get_cp_type(delta, eig) << " " << get_cp_type(delta_, eig_) << std::endl;
+	// 	  	// std::cout << delta << " " << delta_ << std::endl;
+	// 	  	// std::cout << eig[0].real() << " " << eig_[0].real() << std::endl;
+	// 	  	// std::cout << eig[1].real() << " " << eig_[1].real() << std::endl;
+	// 	  }
+	// 	  if(delta * delta_ < 0) return false;
+	// 	  if(eig[0].real() * eig_[0].real() < 0) return false;
+	// 	  if(eig[1].real() * eig_[1].real() < 0) return false;
+	// 	  if(get_cp_type(delta, eig) != get_cp_type(delta_, eig_)) return false;
+	// 	}
+	// }
+	return true;
+}
+
+static bool 
+bilinear_verify_critical_point(int nroots, const double J[2][2][2], double J_[2][2][2], bool verbose=false){
+	for(int i=0; i<nroots; i++){
+		std::complex<double> eig[2];
+		double delta = solve_eigenvalues2x2(J[i], eig);
+		std::complex<double> eig_[2];
+		double delta_ = solve_eigenvalues2x2(J_[i], eig_);
+		if(verbose){
+			std::cout << get_cp_type(delta, eig) << " " << get_cp_type(delta_, eig_) << std::endl;
 		}
+		if(delta * delta_ < 0) return false;
+		if(eig[0].real() * eig_[0].real() < 0) return false;
+		if(eig[1].real() * eig_[1].real() < 0) return false;	
 	}
 	return true;
 }
@@ -610,23 +651,105 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 					}
 					// do verification for x and critical point type
 					if(!unpred_flag){
+						bool verbose = false;
+						// if((fabs(i - 1688.66) < 1) && (fabs(j - 966.522) < 1)) verbose = true;
 						double decompressed_u = (cur_U_pos[0] > 0) ? exp2(decompressed[0]) : -exp2(decompressed[0]);
 						double decompressed_v = (cur_V_pos[0] > 0) ? exp2(decompressed[1]) : -exp2(decompressed[1]);
-						for(int k=0; k<4; k++){
-							bool in_mesh = true;
-							for(int p=0; p<3; p++){
-								// reserved order!
-								// note: x and j are on r2, y and i are on r1
-								if(!(in_range(i + index_offset[k][p][1], (int)r1) && in_range(j + index_offset[k][p][0], (int)r2))){
-									in_mesh = false;
-									break;
+						{
+							// k = 0
+							{
+								int k = 0;
+								// if(verbose) std::cout << k << ":\n";
+								bool in_mesh = true;
+								for(int p=0; p<3; p++){
+									// reserved order!
+									// note: x and j are on r2, y and i are on r1
+									if(!(in_range(i + index_offset[k][p][1], (int)r1) && in_range(j + index_offset[k][p][0], (int)r2))){
+										in_mesh = false;
+										break;
+									}
+								}
+								if(in_mesh){
+									double J[2][2][2];
+									double J_[2][2][2];
+									int nroots = bilinear_extract_critical_point(cur_U_pos[-1 - r2], cur_U_pos[-r2], cur_U_pos[0], cur_U_pos[-1],
+										cur_V_pos[-1 - r2], cur_V_pos[-r2], cur_V_pos[0], cur_V_pos[-1], J);
+									int nroots_ = bilinear_extract_critical_point(cur_U_pos[-1 - r2], cur_U_pos[-r2], decompressed_u, cur_U_pos[-1],
+										cur_V_pos[-1 - r2], cur_V_pos[-r2], decompressed_v, cur_V_pos[-1], J_);
+									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
+									// if(verbose) std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
 								}
 							}
-							if(in_mesh){
-								if(!bilinear_verify_critical_point(cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], cur_U_pos[0], decompressed_u,
-									cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], cur_V_pos[0], decompressed_v)){
-									unpred_flag = true;
-									break;
+							if(!unpred_flag){
+								// k = 1
+								int k = 1;
+								// if(verbose) std::cout << k << ":\n";
+								bool in_mesh = true;
+								for(int p=0; p<3; p++){
+									// reserved order!
+									// note: x and j are on r2, y and i are on r1
+									if(!(in_range(i + index_offset[k][p][1], (int)r1) && in_range(j + index_offset[k][p][0], (int)r2))){
+										in_mesh = false;
+										break;
+									}
+								}
+								if(in_mesh){
+									double J[2][2][2];
+									double J_[2][2][2];
+									int nroots = bilinear_extract_critical_point(cur_U_pos[-1], cur_U_pos[0], cur_U_pos[r2], cur_U_pos[r2 - 1],
+										cur_V_pos[-1], cur_V_pos[0], cur_V_pos[r2], cur_V_pos[r2 - 1], J);
+									int nroots_ = bilinear_extract_critical_point(cur_U_pos[-1], decompressed_u, cur_U_pos[r2], cur_U_pos[r2 - 1],
+										cur_V_pos[-1], decompressed_v, cur_V_pos[r2], cur_V_pos[r2 - 1], J_);
+									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
+									// if(verbose) std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+								}
+							}
+							if(!unpred_flag){
+								// k = 2
+								int k = 2;
+								// if(verbose) std::cout << k << ":\n";
+								bool in_mesh = true;
+								for(int p=0; p<3; p++){
+									// reserved order!
+									// note: x and j are on r2, y and i are on r1
+									if(!(in_range(i + index_offset[k][p][1], (int)r1) && in_range(j + index_offset[k][p][0], (int)r2))){
+										in_mesh = false;
+										break;
+									}
+								}
+								if(in_mesh){
+									double J[2][2][2];
+									double J_[2][2][2];
+									int nroots = bilinear_extract_critical_point(cur_U_pos[0], cur_U_pos[1], cur_U_pos[r2 + 1], cur_U_pos[r2],
+										cur_V_pos[0], cur_V_pos[1], cur_V_pos[r2 + 1], cur_V_pos[r2], J);
+									int nroots_ = bilinear_extract_critical_point(decompressed_u, cur_U_pos[1], cur_U_pos[r2 + 1], cur_U_pos[r2],
+										decompressed_v, cur_V_pos[1], cur_V_pos[r2 + 1], cur_V_pos[r2], J_);
+									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
+									// if(verbose) std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+								}
+							}
+							if(!unpred_flag){
+								// k = 3
+								int k = 3;
+								// if(verbose) std::cout << k << ":\n";
+								bool in_mesh = true;
+								for(int p=0; p<3; p++){
+									// reserved order!
+									// note: x and j are on r2, y and i are on r1
+									if(!(in_range(i + index_offset[k][p][1], (int)r1) && in_range(j + index_offset[k][p][0], (int)r2))){
+										in_mesh = false;
+										break;
+									}
+								}
+								if(in_mesh){
+									double J[2][2][2];
+									double J_[2][2][2];
+									int nroots = bilinear_extract_critical_point(cur_U_pos[- r2], cur_U_pos[-r2 + 1], cur_U_pos[1], cur_U_pos[0],
+										cur_V_pos[- r2], cur_V_pos[-r2 + 1], cur_V_pos[1], cur_V_pos[0], J);
+									int nroots_ = bilinear_extract_critical_point(cur_U_pos[- r2], cur_U_pos[-r2 + 1], cur_U_pos[1], decompressed_u,
+										cur_V_pos[- r2], cur_V_pos[-r2 + 1], cur_V_pos[1], decompressed_v, J_);
+									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
+									// if(verbose) std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
 								}
 							}
 						}
