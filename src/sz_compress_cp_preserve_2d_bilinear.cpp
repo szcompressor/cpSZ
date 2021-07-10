@@ -98,41 +98,30 @@ static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, c
 // maximal error bound to keep the sign of 
 // a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
 static inline double max_eb_to_keep_sign_2d_online_general(const double a, const double b, const double c, const double d, const double e, const double f){
+	// solve cp
+	// 2a * e1 + c * e2 + d = 0
+	// 2b * e2 + c * e1 + e = 0
+	double e1 = (-2*b*d + c*e) / (4*a*b - c*c);
+	double e2 = (-2*a*e + c*d) / (4*a*b - c*c);
 	if(f > 0){
   	// f > 0
 		// Min(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) > 0
-  	if((a > 0) && (b > 0)){
-			// solve cp
-			// 2a * e1 + c * e2 + d = 0
-			// 2b * e2 + c * e1 + e = 0
-			double e1 = (-2*b*d + c*e) / (4*a*b - c*c);
-			double e2 = (-2*a*e + c*d) / (4*a*b - c*c);
-  		double eb = max_eb_to_keep_sign_2d_online_corners_gt0(a, b, c, d, e, f);
-  		if((fabs(e1) < eb) && (fabs(e2) < eb)){
-  			if(a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f > 0) return 1;
-  			else return 0;
-  		}
-  		else return eb;
-  	}
-  	else return max_eb_to_keep_sign_2d_online_corners_gt0(a, b, c, d, e, f);
+		double eb = max_eb_to_keep_sign_2d_online_corners_gt0(a, b, c, d, e, f);
+		if((fabs(e1) < eb) && (fabs(e2) < eb)){
+			if(a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f > 0) return 1;
+			else return 0;
+		}
+		else return eb;
 	}
 	else{
 		// f < 0
 		// Max(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) < 0
-  	if((a < 0) && (b < 0)){
-			// solve cp
-			// 2a * e1 + c * e2 + d = 0
-			// 2b * e2 + c * e1 + e = 0
-			double e1 = (-2*b*d + c*e) / (4*a*b - c*c);
-			double e2 = (-2*a*e + c*d) / (4*a*b - c*c);
-  		double eb = MIN(eb, max_eb_to_keep_sign_2d_online_corners_lt0(a, b, c, d, e, f));
-  		if((fabs(e1) < eb) && (fabs(e2) < eb)){
-  			if(a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f < 0) return 1;
-  			else return 0;
-  		}
-  		else return eb;
-  	}
-  	else return max_eb_to_keep_sign_2d_online_corners_lt0(a, b, c, d, e, f);
+		double eb = MIN(eb, max_eb_to_keep_sign_2d_online_corners_lt0(a, b, c, d, e, f));
+		if((fabs(e1) < eb) && (fabs(e2) < eb)){
+			if(a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f < 0) return 1;
+			else return 0;
+		}
+		else return eb;
 	}
 }
 
@@ -303,7 +292,6 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 		  }
 		}
 		else{
-			// return 0;
 			// dM * (1 - tM + dM) < 0
 			// one root in [0, 1]
 			// keep sign of dM
@@ -468,41 +456,6 @@ bilinear_extract_critical_point(const double u0, const double u1, const double u
 	double pos[2][2];
 	int num_root = inverse_bilinear_interpolation(A0, B0, C0, D0, A1, B1, C1, D1, pos, J);
 	return num_root;
-
-	// if(num_root != num_root_) return false;
-	// else{
-	// 	if(num_root){
-	// 		if(verbose){
-	// 			std::cout << u0 << " " << u1 << " " << u2 << " " << u3 << std::endl;
-	// 			std::cout << v0 << " " << v1 << " " << v2 << " " << v3 << std::endl;
-
-	// 			std::cout << A0 << " " << B0 << " " << C0 << " " << D0 << std::endl;
-	// 			std::cout << A1 << " " << B1 << " " << C1 << " " << D1 << std::endl;
-	// 		}			
-	// 	}
-	// 	for(int i=0; i<num_root; i++){
-	// 		if(verbose){
-	// 			std::cout << "x = " << pos[i][0] << ", y = " << pos[i][1] << std::endl;
-	// 			std::cout << "Jacobian = :\n";
-	// 			std::cout << J[i][0][0] << " " << J[i][0][1] << "\n" << J[i][1][0] << " " << J[i][1][1] << std::endl;
-	// 		}
-	// 	  std::complex<double> eig[2];
-	// 	  double delta = solve_eigenvalues2x2(J[i], eig);
-	// 	  std::complex<double> eig_[2];
-	// 	  double delta_ = solve_eigenvalues2x2(J_[i], eig_);
-	// 	  if(verbose){
-	// 	  	std::cout << get_cp_type(delta, eig) << " " << get_cp_type(delta_, eig_) << std::endl;
-	// 	  	// std::cout << delta << " " << delta_ << std::endl;
-	// 	  	// std::cout << eig[0].real() << " " << eig_[0].real() << std::endl;
-	// 	  	// std::cout << eig[1].real() << " " << eig_[1].real() << std::endl;
-	// 	  }
-	// 	  if(delta * delta_ < 0) return false;
-	// 	  if(eig[0].real() * eig_[0].real() < 0) return false;
-	// 	  if(eig[1].real() * eig_[1].real() < 0) return false;
-	// 	  if(get_cp_type(delta, eig) != get_cp_type(delta_, eig_)) return false;
-	// 	}
-	// }
-	return true;
 }
 
 static bool 
