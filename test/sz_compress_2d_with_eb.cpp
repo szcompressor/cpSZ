@@ -13,7 +13,7 @@ size_t quantize_and_compress_eb(double * eb, size_t num_elements){
     const int base = 2;
     const double log_of_base = log2(base);
     for(int i=0; i<num_elements; i++){
-        quant_ind[i] = eb_exponential_quantize(eb[i], base, log_of_base);    
+        quant_ind[i] = eb_exponential_quantize(eb[i], base, log_of_base, 1e-9);    
     }
     unsigned char * tmp = (unsigned char *) malloc(num_elements * sizeof(int));
     unsigned char * tmp_pos = tmp;
