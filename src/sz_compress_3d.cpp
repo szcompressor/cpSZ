@@ -203,7 +203,7 @@ sz_compress_2d_with_eb(const T * data, const double * precisions, size_t r1, siz
 	meanInfo<T> mean_info;// = optimize_quant_invl_2d(data, r1, r2, precision, capacity);
 	int intv_radius = (capacity >> 1);
 	int * type = (int *) malloc(size.num_elements * sizeof(int));
-	T * unpredictable_data = (T *) malloc((0.5*size.num_elements) * sizeof(T));
+	T * unpredictable_data = (T *) malloc((size.num_elements) * sizeof(T));
 	unsigned char * indicator = (unsigned char *) malloc(size.num_blocks * sizeof(unsigned char));
 	T * unpredictable_data_pos = unpredictable_data;
 	int * reg_params_type = (int *) malloc(RegCoeffNum2d * size.num_blocks * sizeof(int));
