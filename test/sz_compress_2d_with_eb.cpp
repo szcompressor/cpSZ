@@ -8,20 +8,23 @@
 #include <vector>
 using namespace std;
 
-size_t quantize_and_compress_eb(double * eb, size_t num_elements){
+size_t quantize_and_compress_eb(double * eb, size_t num_elements, double base_eb=1e-7){
     int * quant_ind = (int *) malloc(num_elements * sizeof(int));
     const int base = 2;
     const double log_of_base = log2(base);
     for(int i=0; i<num_elements; i++){
-        quant_ind[i] = eb_exponential_quantize(eb[i], base, log_of_base, 1e-9);    
+        quant_ind[i] = eb_exponential_quantize(eb[i], base, log_of_base, base_eb);    
     }
     unsigned char * tmp = (unsigned char *) malloc(num_elements * sizeof(int));
     unsigned char * tmp_pos = tmp;
     Huffman_encode_tree_and_data(2*1024, quant_ind, num_elements, tmp_pos);
     size_t compressed_eb_size = tmp_pos - tmp;
+    unsigned char * tmp2 = (unsigned char *) malloc(num_elements * sizeof(int));
+    size_t lossless_outsize = sz_lossless_compress(ZSTD_COMPRESSOR, 3, tmp, compressed_eb_size, &tmp2);
     free(tmp);
     free(quant_ind);
-    return compressed_eb_size;
+    free(tmp2);
+    return lossless_outsize;
 }
 
 int main(int argc, char ** argv){
@@ -33,10 +36,12 @@ int main(int argc, char ** argv){
     int r1 = atoi(argv[3]);
     int r2 = atoi(argv[4]);
     bool quantize_eb = atoi(argv[5]);
+    double base_eb = 1e-9;
+    if(argc > 6) base_eb = atof(argv[6]);
 
     size_t eb_size = 0;
     if(quantize_eb){
-        eb_size = quantize_and_compress_eb(eb, num_elements);
+        eb_size = quantize_and_compress_eb(eb, num_elements, base_eb);
         std::cout << "Compressed eb size = " << eb_size << endl;
     }
 
