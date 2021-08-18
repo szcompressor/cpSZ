@@ -5,6 +5,7 @@
 #include "sz_compress_block_processing.hpp"
 #include "sz_optimize_quant_intervals.hpp"
 #include "sz_regression_utils.hpp"
+#include "../test/utils.hpp"
 
 // return regression count
 // use block-dependant lorenzo pred & quant
@@ -123,6 +124,7 @@ template
 unsigned char * 
 sz_compress_2d<float>(const float * data, size_t r1, size_t r2, double precision, size_t& compressed_size, int BSIZE, bool block_independant);
 
+double pred_err = 0;
 template<typename T>
 size_t
 prediction_and_quantization_2d_with_border_prediction_with_eb(const T * data, const double * precisions, const DSize_2d& size, const meanInfo<T>& mean_info,
@@ -184,7 +186,7 @@ prediction_and_quantization_2d_with_border_prediction_with_eb(const T * data, co
 			y_data_pos += size.block_size;
 		}
 		// copy bottom of buffer to top of buffer
-		memcpy(pred_buffer, pred_buffer + size.block_size*buffer_dim0_offset, buffer_dim0_offset*sizeof(T));
+		// memcpy(pred_buffer, pred_buffer + size.block_size*buffer_dim0_offset, buffer_dim0_offset*sizeof(T));
 		x_data_pos += size.block_size*size.dim0_offset;
 	}
 	free(pred_buffer);
@@ -223,10 +225,16 @@ sz_compress_2d_with_eb(const T * data, const double * precisions, size_t r1, siz
 	write_variable_to_dst(compressed_pos, reg_count);
 	write_variable_to_dst(compressed_pos, unpredictable_count);
 	write_array_to_dst(compressed_pos, unpredictable_data, unpredictable_count);
+	writefile("unpred_data.dat", unpredictable_data, unpredictable_count);
 	convertIntArray2ByteArray_fast_1b_to_result_sz(indicator, size.num_blocks, compressed_pos);
 	if(reg_count) encode_regression_coefficients_2d(reg_params_type, reg_unpredictable_data, reg_count, reg_unpredictable_data_pos - reg_unpredictable_data, compressed_pos);
+	unsigned char * tmp = compressed_pos;
 	Huffman_encode_tree_and_data(2*capacity, type, size.num_elements, compressed_pos);
 	compressed_size = compressed_pos - compressed;
+	std::cout << "Prediction error = " << pred_err << std::endl;
+	std::cout << "Unpredictable_count = " << unpredictable_count << ", size = " << unpredictable_count * sizeof(T) << std::endl;
+	std::cout << "Huffman size = " << compressed_pos - tmp << std::endl;
+	std::cout << "Compressed size = " << compressed_size << std::endl;
 	free(indicator);
 	free(unpredictable_data);
 	free(reg_params_type);

@@ -101,6 +101,7 @@ block_pred_and_quant_lorenzo_2d(const meanInfo<T>& mean_info, const T * data_pos
 	}
 }
 
+extern double pred_err;
 template<typename T>
 inline void
 block_pred_and_quant_lorenzo_2d_with_eb(const meanInfo<T>& mean_info, const T * data_pos, T * buffer, const double * precision_pos, int capacity, int intv_radius, 
@@ -126,6 +127,7 @@ block_pred_and_quant_lorenzo_2d_with_eb(const meanInfo<T>& mean_info, const T * 
 				else{
 					float pred = lorenzo_predict_2d(cur_buffer_pos, buffer_dim0_offset);
 					*(type_pos++) = quantize(pred, *cur_data_pos, precision, capacity, intv_radius, unpredictable_data_pos, cur_buffer_pos);
+					pred_err += fabs(pred - *cur_buffer_pos);
 				}
 			}
 			cur_data_pos ++;

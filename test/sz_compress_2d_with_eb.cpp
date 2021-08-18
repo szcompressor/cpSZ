@@ -8,11 +8,13 @@
 #include <vector>
 using namespace std;
 
-size_t quantize_and_compress_eb(double * eb, size_t num_elements, double base_eb=1e-7){
+size_t quantize_and_compress_eb(double * eb, size_t num_elements, double base_eb=1e-7, double global_eb=0){
     int * quant_ind = (int *) malloc(num_elements * sizeof(int));
     const int base = 2;
     const double log_of_base = log2(base);
     for(int i=0; i<num_elements; i++){
+        if(eb[i] < 0) eb[i] = 0;
+        if((global_eb > 0) && (eb[i] > global_eb)) eb[i] = global_eb;
         quant_ind[i] = eb_exponential_quantize(eb[i], base, log_of_base, base_eb);    
     }
     unsigned char * tmp = (unsigned char *) malloc(num_elements * sizeof(int));
@@ -38,10 +40,12 @@ int main(int argc, char ** argv){
     bool quantize_eb = atoi(argv[5]);
     double base_eb = 1e-9;
     if(argc > 6) base_eb = atof(argv[6]);
+    double global_eb = 0;
+    if(argc > 7) global_eb = atof(argv[7]);
 
     size_t eb_size = 0;
     if(quantize_eb){
-        eb_size = quantize_and_compress_eb(eb, num_elements, base_eb);
+        eb_size = quantize_and_compress_eb(eb, num_elements, base_eb, global_eb);
         std::cout << "Compressed eb size = " << eb_size << endl;
     }
 
