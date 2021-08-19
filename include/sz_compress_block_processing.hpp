@@ -102,6 +102,9 @@ block_pred_and_quant_lorenzo_2d(const meanInfo<T>& mean_info, const T * data_pos
 }
 
 extern double pred_err;
+extern const float * ub_f;	// upperbound
+extern const float * lb_f;	// lowerbound
+extern const float * db_f;	// data address
 template<typename T>
 inline void
 block_pred_and_quant_lorenzo_2d_with_eb(const meanInfo<T>& mean_info, const T * data_pos, T * buffer, const double * precision_pos, int capacity, int intv_radius, 
@@ -127,6 +130,30 @@ block_pred_and_quant_lorenzo_2d_with_eb(const meanInfo<T>& mean_info, const T * 
 				else{
 					float pred = lorenzo_predict_2d(cur_buffer_pos, buffer_dim0_offset);
 					*(type_pos++) = quantize(pred, *cur_data_pos, precision, capacity, intv_radius, unpredictable_data_pos, cur_buffer_pos);
+					T decompressed_data = *cur_buffer_pos;
+					ptrdiff_t offset = data_pos - reinterpret_cast<const T *>(db_f);
+					if(decompressed_data > ub_f[offset]){
+						// re-quantize to [lb, ub]
+						int shift_ind = (int) ((decompressed_data - ub_f[offset]) / (2*precision)) + 1;
+						T shift_data = decompressed_data - shift_ind * 2 * precision;
+						type_pos[-1] = quantize(pred, shift_data, precision, capacity, intv_radius, unpredictable_data_pos, cur_buffer_pos);
+						if(*cur_buffer_pos < lb_f[offset]){
+							type_pos[-1] = 0;
+						 	*cur_buffer_pos = *cur_data_pos;
+						 	*(unpredictable_data_pos++) = *cur_data_pos;
+						}
+					}
+					else if(decompressed_data < lb_f[offset]){
+						// re-quantize to [lb, ub]
+						int shift_ind = (int) ((lb_f[offset] - decompressed_data) / (2*precision)) + 1;
+						T shift_data = decompressed_data + shift_ind * 2 * precision;
+						type_pos[-1] = quantize(pred, shift_data, precision, capacity, intv_radius, unpredictable_data_pos, cur_buffer_pos);
+						if(*cur_buffer_pos > ub_f[offset]){
+							type_pos[-1] = 0;
+						 	*cur_buffer_pos = *cur_data_pos;
+						 	*(unpredictable_data_pos++) = *cur_data_pos;
+						}
+					}
 					pred_err += fabs(pred - *cur_buffer_pos);
 				}
 			}

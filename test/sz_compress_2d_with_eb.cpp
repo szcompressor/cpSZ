@@ -29,6 +29,9 @@ size_t quantize_and_compress_eb(double * eb, size_t num_elements, double base_eb
     return lossless_outsize;
 }
 
+extern const float * ub_f;
+extern const float * lb_f;
+
 int main(int argc, char ** argv){
     size_t num_elements = 0;
     float * data = readfile<float>(argv[1], num_elements);
@@ -49,6 +52,14 @@ int main(int argc, char ** argv){
         std::cout << "Compressed eb size = " << eb_size << endl;
     }
 
+    float * ub = (float *) malloc(r1*r2*sizeof(float));
+    float * lb = (float *) malloc(r1*r2*sizeof(float));
+    for(int i=0; i<num_elements; i++){
+        ub[i] = 100;
+        lb[i] = -100;
+    }
+    ub_f = ub;
+    lb_f = lb;
     size_t result_size = 0;
     struct timespec start, end;
     int err = 0;
@@ -80,4 +91,6 @@ int main(int argc, char ** argv){
     free(result);
     free(data);
     free(dec_data);
+    free(lb);
+    free(ub);
 }

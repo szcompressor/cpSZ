@@ -125,6 +125,9 @@ unsigned char *
 sz_compress_2d<float>(const float * data, size_t r1, size_t r2, double precision, size_t& compressed_size, int BSIZE, bool block_independant);
 
 double pred_err = 0;
+const float * ub_f;	// upperbound
+const float * lb_f;	// lowerbound
+const float * db_f;	// data buffer
 template<typename T>
 size_t
 prediction_and_quantization_2d_with_border_prediction_with_eb(const T * data, const double * precisions, const DSize_2d& size, const meanInfo<T>& mean_info,
@@ -147,6 +150,9 @@ prediction_and_quantization_2d_with_border_prediction_with_eb(const T * data, co
 	size_t buffer_dim0_offset = size.d2+1;
 	T * pred_buffer = (T *) malloc((size.block_size+1)*(size.d2+1)*sizeof(T));
 	memset(pred_buffer, 0, (size.block_size+1)*(size.d2+1)*sizeof(T));
+	// assign data buffer address
+	// HARDCODE
+	db_f = reinterpret_cast<const float *>(data);
 	size_t reg_count = 0;
 	int capacity_lorenzo = mean_info.use_mean ? capacity - 2 : capacity;
 	const T * x_data_pos = data;
@@ -225,7 +231,7 @@ sz_compress_2d_with_eb(const T * data, const double * precisions, size_t r1, siz
 	write_variable_to_dst(compressed_pos, reg_count);
 	write_variable_to_dst(compressed_pos, unpredictable_count);
 	write_array_to_dst(compressed_pos, unpredictable_data, unpredictable_count);
-	writefile("unpred_data.dat", unpredictable_data, unpredictable_count);
+	// writefile("unpred_data.dat", unpredictable_data, unpredictable_count);
 	convertIntArray2ByteArray_fast_1b_to_result_sz(indicator, size.num_blocks, compressed_pos);
 	if(reg_count) encode_regression_coefficients_2d(reg_params_type, reg_unpredictable_data, reg_count, reg_unpredictable_data_pos - reg_unpredictable_data, compressed_pos);
 	unsigned char * tmp = compressed_pos;
