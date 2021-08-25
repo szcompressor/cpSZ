@@ -82,8 +82,12 @@ int main(int argc, char ** argv){
     free(result_after_lossless);
     // writefile("dec_data.dat", dec_data, num_elements);
     for(int i=0; i<num_elements; i++){
-        if(fabs(data[i] - dec_data[i]) > eb[i]){
-            cerr << "Error bound is not respected in " << i << "-th element: " << data[i] << " " << dec_data[i] << std::endl;
+        // if(fabs(data[i] - dec_data[i]) > eb[i]){
+        //     cerr << "Error bound is not respected in " << i << "-th element: " << data[i] << " " << dec_data[i] << std::endl;
+        //     exit(0);
+        // }
+        if((data[i] - dec_data[i] > up[i]) || (data[i] - dec_data[i]) < lb[i]){
+            cerr << "Bound is not respected in " << i << "-th element: " << data[i] << " " << dec_data[i] << ", lb = " << lb[i] << ", ub = " << ub[i]<< std::endl;
             exit(0);
         }
     }
