@@ -21,7 +21,7 @@ size_t quantize_and_compress_eb(double * eb, size_t num_elements, double base_eb
     unsigned char * tmp_pos = tmp;
     Huffman_encode_tree_and_data(2*1024, quant_ind, num_elements, tmp_pos);
     size_t compressed_eb_size = tmp_pos - tmp;
-    unsigned char * tmp2 = (unsigned char *) malloc(num_elements * sizeof(int));
+    unsigned char * tmp2 = NULL;
     size_t lossless_outsize = sz_lossless_compress(ZSTD_COMPRESSOR, 3, tmp, compressed_eb_size, &tmp2);
     free(tmp);
     free(quant_ind);
@@ -68,7 +68,7 @@ int main(int argc, char ** argv){
     struct timespec start, end;
     int err = 0;
     err = clock_gettime(CLOCK_REALTIME, &start);
-    unsigned char * result =  sz_compress_2d_with_eb(data, eb, r1, r2, result_size);
+    unsigned char * result = sz_compress_2d_with_eb(data, eb, r1, r2, result_size);
     unsigned char * result_after_lossless = NULL;
     size_t lossless_outsize = sz_lossless_compress(ZSTD_COMPRESSOR, 3, result, result_size, &result_after_lossless);
     err = clock_gettime(CLOCK_REALTIME, &end);
@@ -96,6 +96,7 @@ int main(int argc, char ** argv){
         }
     }
     verify(data, dec_data, num_elements);
+    free(eb);
     free(result);
     free(data);
     free(dec_data);

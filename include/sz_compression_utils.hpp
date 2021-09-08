@@ -57,7 +57,7 @@ quantize(float pred, T cur_data, double precision, int capacity, int intv_radius
 		int quant_index = (int)(quant_diff/2) + intv_radius;
 		T decompressed_data = pred + 2 * (quant_index - intv_radius) * precision; 
 		*decompressed = decompressed_data;
-		if(fabs(decompressed_data - cur_data) <= precision) return quant_index;
+		if(fabs(decompressed_data - cur_data) < precision) return quant_index;
  	}
  	*decompressed = cur_data;
  	*(unpredictable_data_pos++) = cur_data;

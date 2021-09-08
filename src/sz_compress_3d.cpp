@@ -223,11 +223,12 @@ sz_compress_2d_with_eb(const T * data, const double * precisions, size_t r1, siz
 	// TODO: change to a better estimated size
 	size_t est_size = size.num_elements*sizeof(T)*1.2;
 	compressed = (unsigned char *) malloc(est_size);
+    memset(compressed, 0, est_size);
 	unsigned char * compressed_pos = compressed;
 	write_variable_to_dst(compressed_pos, size.block_size);
 	write_variable_to_dst(compressed_pos, (char) block_independant);
 	write_variable_to_dst(compressed_pos, intv_radius);
-	write_variable_to_dst(compressed_pos, mean_info);
+	// write_variable_to_dst(compressed_pos, mean_info);
 	write_variable_to_dst(compressed_pos, reg_count);
 	write_variable_to_dst(compressed_pos, unpredictable_count);
 	write_array_to_dst(compressed_pos, unpredictable_data, unpredictable_count);
@@ -241,6 +242,8 @@ sz_compress_2d_with_eb(const T * data, const double * precisions, size_t r1, siz
 	std::cout << "Unpredictable_count = " << unpredictable_count << ", size = " << unpredictable_count * sizeof(T) << std::endl;
 	std::cout << "Huffman size = " << compressed_pos - tmp << std::endl;
 	std::cout << "Compressed size = " << compressed_size << std::endl;
+
+    // memset(compressed, 0, compressed_size);
 	free(indicator);
 	free(unpredictable_data);
 	free(reg_params_type);

@@ -114,7 +114,7 @@ prediction_and_decompression_2d_with_border_prediction_with_eb(const DSize_2d& s
 			pred_buffer_pos += size_y;
 			indicator_pos ++;
 		}
-		memcpy(pred_buffer, pred_buffer + size.block_size*buffer_dim0_offset, buffer_dim0_offset*sizeof(T));
+		// memcpy(pred_buffer, pred_buffer + size.block_size*buffer_dim0_offset, buffer_dim0_offset*sizeof(T));
 		x_data_pos += size.block_size*size.dim0_offset;
 	}
 	free(pred_buffer);
@@ -133,7 +133,7 @@ sz_decompress_2d_with_eb(const unsigned char * compressed, const double * precis
 	int intv_radius = 0;
 	read_variable_from_src(compressed_pos, intv_radius);
 	meanInfo<T> mean_info;
-	read_variable_from_src(compressed_pos, mean_info);
+	// read_variable_from_src(compressed_pos, mean_info);
 	size_t reg_count = 0;
 	read_variable_from_src(compressed_pos, reg_count);
 	size_t unpredictable_count = 0;
