@@ -137,22 +137,17 @@ block_pred_and_quant_lorenzo_2d_with_eb(const meanInfo<T>& mean_info, const T * 
 							// re-quantize to [lb, ub]
 							type_pos[-1] --;
                             *cur_buffer_pos = pred + 2 * (type_pos[-1] - intv_radius) * precision;
-                            if(*cur_buffer_pos >= ub_f[offset] || (*cur_buffer_pos <= lb_f[offset])){
-                                type_pos[-1] = 0;
-                                *cur_buffer_pos = *cur_data_pos;
-                                *(unpredictable_data_pos++) = *cur_data_pos;
-                            }
 						}
 						else if(decompressed_data <= lb_f[offset]){
 							// re-quantize to [lb, ub]
 							type_pos[-1] ++;
                             *cur_buffer_pos = pred + 2 * (type_pos[-1] - intv_radius) * precision;
-                            if(*cur_buffer_pos >= ub_f[offset] || (*cur_buffer_pos <= lb_f[offset])){
-                                type_pos[-1] = 0;
-                                *cur_buffer_pos = *cur_data_pos;
-                                *(unpredictable_data_pos++) = *cur_data_pos;
-                            }
 						}
+                        if(*cur_buffer_pos >= ub_f[offset] || (*cur_buffer_pos <= lb_f[offset])){
+                            type_pos[-1] = 0;
+                            *cur_buffer_pos = *cur_data_pos;
+                            *(unpredictable_data_pos++) = *cur_data_pos;
+                        }
                         // if(offset == 1800){
                         //     printf("ub = %.10f, lb = %.10f, data = %.10f, dec_data = %.10f, pred = %.10f, type = %d\n", ub_f[offset], lb_f[offset], *cur_data_pos, *cur_buffer_pos, pred, type_pos[-1]);
                         // }
