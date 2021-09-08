@@ -52,12 +52,16 @@ int main(int argc, char ** argv){
         std::cout << "Compressed eb size = " << eb_size << endl;
     }
 
-    float * ub = (float *) malloc(r1*r2*sizeof(float));
-    float * lb = (float *) malloc(r1*r2*sizeof(float));
-    for(int i=0; i<num_elements; i++){
-        ub[i] = 100;
-        lb[i] = -100;
-    }
+    // float * ub = (float *) malloc(r1*r2*sizeof(float));
+    // float * lb = (float *) malloc(r1*r2*sizeof(float));
+    // for(int i=0; i<num_elements; i++){
+    //     ub[i] = 100;
+    //     lb[i] = -100;
+    // }
+
+    float * ub = readfile<float>(argv[8], num_elements);
+    float * lb = readfile<float>(argv[9], num_elements);
+
     ub_f = ub;
     lb_f = lb;
     size_t result_size = 0;
@@ -86,8 +90,8 @@ int main(int argc, char ** argv){
         //     cerr << "Error bound is not respected in " << i << "-th element: " << data[i] << " " << dec_data[i] << std::endl;
         //     exit(0);
         // }
-        if((data[i] - dec_data[i] > up[i]) || (data[i] - dec_data[i]) < lb[i]){
-            cerr << "Bound is not respected in " << i << "-th element: " << data[i] << " " << dec_data[i] << ", lb = " << lb[i] << ", ub = " << ub[i]<< std::endl;
+        if((dec_data[i] > ub[i]) || (dec_data[i] < lb[i])){
+            cerr << "Bound is not respected in " << i << "-th element: " << data[i] << " " << dec_data[i] << ", eb = " << eb[i] << ", lb = " << lb[i] << ", ub = " << ub[i]<< std::endl;
             exit(0);
         }
     }
