@@ -90,7 +90,7 @@ inline double max_eb_to_keep_sign_eigen_delta_2(const T u0, const T u1, const T 
     accumulate(-(c[2] + c[3])*v2, positive, negative);
     eb = max_eb_to_keep_sign(positive, negative, 1);
     // keep sign for C
-    eb = MIN(eb, max_eb_to_keep_sign_det2x2(u0, u1, u2, v0, v1, v2));
+    eb = MINF(eb, max_eb_to_keep_sign_det2x2(u0, u1, u2, v0, v1, v2));
   }
   T m = c[1]*c[2] - c[0]*c[3];
   T C = (-m) * (u0*v1 - u0*v2 + u1*v2 - u1*v0 + u2*v0 - u2*v1);
@@ -114,7 +114,7 @@ inline double max_eb_to_keep_sign_eigen_delta_2(const T u0, const T u1, const T 
     accumulate(-4*m*u2*v1, positive, negative);
     accumulate(-4*m*u0*v2, positive, negative);
     accumulate(4*m*u1*v2, positive, negative);
-    eb = MIN(eb, max_eb_to_keep_sign(positive, negative, 2));
+    eb = MINF(eb, max_eb_to_keep_sign(positive, negative, 2));
   }
   return eb;
 }
@@ -137,32 +137,32 @@ inline double max_eb_to_keep_position_and_type(const T u0, const T u1, const T u
 		if(f1 && f2 && f3){
 			// critical point found
 			eb = 1;
-			double eb1 = MIN(max_eb_to_keep_sign_2d_offline_2(u2v0, -u0v2), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u1v2, -u2v1));
-			double eb2 = MIN(max_eb_to_keep_sign_2d_offline_2(u1v2, -u2v1), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u2v0, -u0v2));
-			double eb3 = MIN(max_eb_to_keep_sign_2d_offline_2(u0v1, -u1v0), max_eb_to_keep_sign_2d_offline_4(u1v2, -u2v1, u2v0, -u0v2));
-			double eb4 = MIN(eb3, max_eb_to_keep_sign_eigen_delta_2(u0, u1, u2, v0, v1, v2, x0, x1, x2, y0, y1, y2));
-			eb = MIN(eb1, eb2);
-			eb = MIN(eb, eb4);
+			double eb1 = MINF(max_eb_to_keep_sign_2d_offline_2(u2v0, -u0v2), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u1v2, -u2v1));
+			double eb2 = MINF(max_eb_to_keep_sign_2d_offline_2(u1v2, -u2v1), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u2v0, -u0v2));
+			double eb3 = MINF(max_eb_to_keep_sign_2d_offline_2(u0v1, -u1v0), max_eb_to_keep_sign_2d_offline_4(u1v2, -u2v1, u2v0, -u0v2));
+			double eb4 = MINF(eb3, max_eb_to_keep_sign_eigen_delta_2(u0, u1, u2, v0, v1, v2, x0, x1, x2, y0, y1, y2));
+			eb = MINF(eb1, eb2);
+			eb = MINF(eb, eb4);
 		}
 		else{
 			// no critical point
 			eb = 0;
 			if(!f1){
-				double eb_cur = MIN(max_eb_to_keep_sign_2d_offline_2(u2v0, -u0v2), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u1v2, -u2v1));
-				// double eb_cur = MIN(max_eb_to_keep_sign_2(u2, u0, v2, v0), max_eb_to_keep_sign_4(u0, u1, u2, v0, v1, v2));
+				double eb_cur = MINF(max_eb_to_keep_sign_2d_offline_2(u2v0, -u0v2), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u1v2, -u2v1));
+				// double eb_cur = MINF(max_eb_to_keep_sign_2(u2, u0, v2, v0), max_eb_to_keep_sign_4(u0, u1, u2, v0, v1, v2));
 				eb = MAX(eb, eb_cur);
 			}
 			if(!f2){
-				double eb_cur = MIN(max_eb_to_keep_sign_2d_offline_2(u1v2, -u2v1), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u2v0, -u0v2));
-				// double eb_cur = MIN(max_eb_to_keep_sign_2(u1, u2, v1, v2), max_eb_to_keep_sign_4(u2, u0, u1, v2, v0, v1));
+				double eb_cur = MINF(max_eb_to_keep_sign_2d_offline_2(u1v2, -u2v1), max_eb_to_keep_sign_2d_offline_4(u0v1, -u1v0, u2v0, -u0v2));
+				// double eb_cur = MINF(max_eb_to_keep_sign_2(u1, u2, v1, v2), max_eb_to_keep_sign_4(u2, u0, u1, v2, v0, v1));
 				eb = MAX(eb, eb_cur);
 			}
 			if(!f3){
-				double eb_cur = MIN(max_eb_to_keep_sign_2d_offline_2(u0v1, -u1v0), max_eb_to_keep_sign_2d_offline_4(u1v2, -u2v1, u2v0, -u0v2));
-				// double eb_cur = MIN(max_eb_to_keep_sign_2(u0, u1, v0, v1), max_eb_to_keep_sign_4(u1, u2, u0, v1, v2, v0));
+				double eb_cur = MINF(max_eb_to_keep_sign_2d_offline_2(u0v1, -u1v0), max_eb_to_keep_sign_2d_offline_4(u1v2, -u2v1, u2v0, -u0v2));
+				// double eb_cur = MINF(max_eb_to_keep_sign_2(u0, u1, v0, v1), max_eb_to_keep_sign_4(u1, u2, u0, v1, v2, v0));
 				eb = MAX(eb, eb_cur);
 			}
-			// eb = MIN(eb, DEFAULT_EB);
+			// eb = MINF(eb, DEFAULT_EB);
 		}
 	}
 	return eb;
@@ -197,9 +197,9 @@ sz_compress_cp_preserve_2d_offline(const T * U, const T * V, size_t r1, size_t r
 				double max_cur_eb = max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
 					V_row_pos[offset[0]], V_row_pos[offset[1]], V_row_pos[offset[2]], X[0][1], X[1][1], X[2][1],
 					X[0][0], X[1][0], X[2][0]);
-				eb_row_pos[offset[0]] = MIN(eb_row_pos[offset[0]], max_cur_eb);
-				eb_row_pos[offset[1]] = MIN(eb_row_pos[offset[1]], max_cur_eb);
-				eb_row_pos[offset[2]] = MIN(eb_row_pos[offset[2]], max_cur_eb);
+				eb_row_pos[offset[0]] = MINF(eb_row_pos[offset[0]], max_cur_eb);
+				eb_row_pos[offset[1]] = MINF(eb_row_pos[offset[1]], max_cur_eb);
+				eb_row_pos[offset[2]] = MINF(eb_row_pos[offset[2]], max_cur_eb);
 			}
 			U_row_pos ++;
 			V_row_pos ++;
@@ -297,9 +297,9 @@ sz_compress_cp_preserve_2d_offline_log(const T * U, const T * V, size_t r1, size
 				double max_cur_eb = max_eb_to_keep_position_and_type(U_row_pos[offset[0]], U_row_pos[offset[1]], U_row_pos[offset[2]],
 					V_row_pos[offset[0]], V_row_pos[offset[1]], V_row_pos[offset[2]], X[0][1], X[1][1], X[2][1],
 					X[0][0], X[1][0], X[2][0]);
-				eb_row_pos[offset[0]] = MIN(eb_row_pos[offset[0]], max_cur_eb);
-				eb_row_pos[offset[1]] = MIN(eb_row_pos[offset[1]], max_cur_eb);
-				eb_row_pos[offset[2]] = MIN(eb_row_pos[offset[2]], max_cur_eb);
+				eb_row_pos[offset[0]] = MINF(eb_row_pos[offset[0]], max_cur_eb);
+				eb_row_pos[offset[1]] = MINF(eb_row_pos[offset[1]], max_cur_eb);
+				eb_row_pos[offset[2]] = MINF(eb_row_pos[offset[2]], max_cur_eb);
 			}
 			U_row_pos ++;
 			V_row_pos ++;
@@ -399,10 +399,10 @@ inline double max_eb_to_keep_sign_2d_online(const T A, const T B, const T C=0){
 // W2 + W0 = u0v1 - u1v0 + u1v2 - u2v1
 template<typename T>
 inline double max_eb_to_keep_position_online(const T u0v1, const T u1v0, const T u1v2, const T u2v1, const T u2v0, const T u0v2){
-	double eb = MIN(max_eb_to_keep_sign_2d_online(-u2v1, u1v2), max_eb_to_keep_sign_2d_online(u2v0, -u0v2));
-	// eb = MIN(eb, max_eb_to_keep_sign_2d_online(u2v0, -u0v2, u0v1 - u1v0));
-	// eb = MIN(eb, max_eb_to_keep_sign_2d_online(-u2v1, u1v2, u0v1 - u1v0));
-	// eb = MIN(eb, max_eb_to_keep_sign_2d_online(u2v0 - u2v1, u1v2 - u0v2));
+	double eb = MINF(max_eb_to_keep_sign_2d_online(-u2v1, u1v2), max_eb_to_keep_sign_2d_online(u2v0, -u0v2));
+	// eb = MINF(eb, max_eb_to_keep_sign_2d_online(u2v0, -u0v2, u0v1 - u1v0));
+	// eb = MINF(eb, max_eb_to_keep_sign_2d_online(-u2v1, u1v2, u0v1 - u1v0));
+	// eb = MINF(eb, max_eb_to_keep_sign_2d_online(u2v0 - u2v1, u1v2 - u0v2));
 	return eb;
 }
 
@@ -413,16 +413,8 @@ template<typename T>
 inline double max_eb_to_keep_type_online(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2, const T c[4]){
 	double eb = 1;
 	{
-		// keep sign for B
-	    // coeff[0] = c[0]*u0;
-	    // coeff[1] = c[1]*u1;
-	    // coeff[2] = - (c[1] + c[0])*u2;
-	    // coeff[3] = c[2]*v0;
-	    // coeff[4] = c[3]*v1;
-	    // coeff[5] = - (c[3] + c[2])*v2;
-		eb = max_eb_to_keep_sign_2d_online(-c[0]*u2 - c[1]*u2, -c[2]*v2 - c[3]*v2, c[0]*u0 + c[1]*u1 + c[2]*v0 + c[3]*v1);
 		// keep sign for C
-		eb = MIN(eb, max_eb_to_keep_sign_2d_online(u2*v0 - u2*v1, u1*v2 - u0*v2, u0*v1 - u1*v0));
+		eb = MINF(eb, max_eb_to_keep_sign_2d_online(u2*v0 - u2*v1, u1*v2 - u0*v2, u0*v1 - u1*v0));
 	}
 	T m = c[1]*c[2] - c[0]*c[3];
 	T C = (-m) * (u0*v1 - u0*v2 + u1*v2 - u1*v0 + u2*v0 - u2*v1);
@@ -441,35 +433,43 @@ inline double max_eb_to_keep_type_online(const T u0, const T u1, const T u2, con
 		double delta = C*C - 4*F;
 		if(delta == 0) return 0;
 		else if(delta > 0){
+            {
+                // keep sign for B
+                // coeff[0] = c[0]*u0;
+                // coeff[1] = c[1]*u1;
+                // coeff[2] = - (c[1] + c[0])*u2;
+                // coeff[3] = c[2]*v0;
+                // coeff[4] = c[3]*v1;
+                // coeff[5] = - (c[3] + c[2])*v2;
+                eb = max_eb_to_keep_sign_2d_online(-c[0]*u2 - c[1]*u2, -c[2]*v2 - c[3]*v2, c[0]*u0 + c[1]*u1 + c[2]*v0 + c[3]*v1);
+            }
 			// (|2AC' - 4D| + |2BC' - 4E|)* -e + delta > 0
 			if((fabs(2*A*C - 4*D) + fabs(2*B*C - 4*E)) == 0) eb = 1;
-			else eb = MIN(eb, delta/(fabs(2*A*C - 4*D) + fabs(2*B*C - 4*E)));
-			// check four edges
-
+			else eb = MINF(eb, delta/(fabs(2*A*C - 4*D) + fabs(2*B*C - 4*E)));
 		}
 		else{
 			// (|A| + |B|)^2*e^2 + (|2AC' - 4D| + |2BC' - 4E|)*e + delta < 0
-			// double a = (fabs(A) + fabs(B))*(fabs(A) + fabs(B));
-			// double b = fabs(2*A*C - 4*D) + fabs(2*B*C - 4*E);
-			// double c = delta;
+			double a = (fabs(A) + fabs(B))*(fabs(A) + fabs(B));
+			double b = fabs(2*A*C - 4*D) + fabs(2*B*C - 4*E);
+			double c = delta;
 			// if(b*b - 4*a*c < 0){
 			// 	printf("impossible as a*c is always less than 0\n");
 			// 	exit(0);
 			// }
-			// eb = MIN(eb, (-b + sqrt(b*b - 4*a*c))/(2*a));
+			eb = MINF(eb, (-b + sqrt(b*b - 4*a*c))/(2*a));
 
 			// check four corners
-			double e1[2] = {-1, 1};
-			double e2[2] = {-1, 1};
-			double c = delta;
-			for(int i=0; i<2; i++){
-				for(int j=0; j<2; j++){
-					double a = (e1[i] * A + e2[j] * B) * (e1[i] * A + e2[j] * B);
-					double b = (2*A*C - 4*D) * e1[i] + (2*B*C - 4*E) * e2[j];
-					if(a == 0) eb = MIN(eb, 1);
-					else eb = MIN(eb, (-b + sqrt(b*b - 4*a*c))/(2*a));
-				}
-			}
+			// double e1[2] = {-1, 1};
+			// double e2[2] = {-1, 1};
+			// double c = delta;
+			// for(int i=0; i<2; i++){
+			// 	for(int j=0; j<2; j++){
+			// 		double a = (e1[i] * A + e2[j] * B) * (e1[i] * A + e2[j] * B);
+			// 		double b = (2*A*C - 4*D) * e1[i] + (2*B*C - 4*E) * e2[j];
+			// 		if(a == 0) eb = MINF(eb, 1);
+			// 		else eb = MINF(eb, (-b + sqrt(b*b - 4*a*c))/(2*a));
+			// 	}
+			// }
 		}
 	}
 	return eb;
@@ -511,19 +511,19 @@ derive_cp_eb_for_positions_online(const T u0, const T u1, const T u2, const T v0
 	double eb = 0;
 	if(f1 && f2 && f3){
 		// eb = max_eb_to_keep_position_online(u0v1, u1v0, u1v2, u2v1, u2v0, u0v2);
-		eb = MIN(max_eb_to_keep_position_online(u0*v1, u1*v0, u1*v2, u2*v1, u2*v0, u0*v2), 
+		eb = MINF(max_eb_to_keep_position_online(u0*v1, u1*v0, u1*v2, u2*v1, u2*v0, u0*v2), 
 			max_eb_to_keep_type_online(u0, u1, u2, v0, v1, v2, c));
 	}
 	else{
 		eb = 0;
 		if(!f1){
 			// W1(W0 + W2)
-			double cur_eb = MIN(max_eb_to_keep_sign_2d_online(u2*v0, -u0*v2), max_eb_to_keep_sign_2d_online(-u2*v1, u1*v2, u0*v1 - u1*v0));
+			double cur_eb = MINF(max_eb_to_keep_sign_2d_online(u2*v0, -u0*v2), max_eb_to_keep_sign_2d_online(-u2*v1, u1*v2, u0*v1 - u1*v0));
 			eb = MAX(eb, cur_eb);
 		}
 		if(!f2){
 			// W0(W1 + W2)
-			double cur_eb = MIN(max_eb_to_keep_sign_2d_online(-u2*v1, u1*v2), max_eb_to_keep_sign_2d_online(u2*v0, -u0*v2, u0*v1 - u1*v0));
+			double cur_eb = MINF(max_eb_to_keep_sign_2d_online(-u2*v1, u1*v2), max_eb_to_keep_sign_2d_online(u2*v0, -u0*v2, u0*v1 - u1*v0));
 			eb = MAX(eb, cur_eb);				
 		}
 		if(!f3){
@@ -617,7 +617,7 @@ sz_compress_cp_preserve_2d_online(const T * U, const T * V, size_t r1, size_t r2
 					}
 				}
 				if(in_mesh){
-					required_eb = MIN(required_eb, derive_cp_eb_for_positions_online(cur_U_pos[offsets[k]], cur_U_pos[offsets[k+1]], cur_U_pos[0],
+					required_eb = MINF(required_eb, derive_cp_eb_for_positions_online(cur_U_pos[offsets[k]], cur_U_pos[offsets[k+1]], cur_U_pos[0],
 						cur_V_pos[offsets[k]], cur_V_pos[offsets[k+1]], cur_V_pos[0], inv_C[k]));
 				}
 			}
@@ -828,7 +828,7 @@ sz_compress_cp_preserve_2d_online_log(const T * U, const T * V, size_t r1, size_
 					// int index = simplex_offset[k] + 2*i*r2 + 2*j;
 					// conds[index].computed = false;
 					// count[index] ++;
-					required_eb = MIN(required_eb, derive_cp_eb_for_positions_online(cur_U_pos[offsets[k]], cur_U_pos[offsets[k+1]], cur_U_pos[0],
+					required_eb = MINF(required_eb, derive_cp_eb_for_positions_online(cur_U_pos[offsets[k]], cur_U_pos[offsets[k+1]], cur_U_pos[0],
 						cur_V_pos[offsets[k]], cur_V_pos[offsets[k+1]], cur_V_pos[0], inv_C[k]));
 				}
 			}

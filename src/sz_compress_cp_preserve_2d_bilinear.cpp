@@ -4,6 +4,7 @@
 #include "sz_def.hpp"
 #include "sz_compression_utils.hpp"
 #include <complex>
+#include "../test/utils.hpp"
 
 // maximal error bound to keep the sign of A*(1 + e_1) + B*(1 + e_2) + C
 template<typename T>
@@ -25,7 +26,7 @@ static inline double max_eb_to_keep_sign_2d_online_corners_gt0(const double a, c
 		double tmp_b = - d - e;
 		double tmp_c = f;
 		double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-		if(x > 0) eb = MIN(eb, x);
+		if(x > 0) eb = MINF(eb, x);
 	}
 	{
 		// [-t, t]
@@ -33,7 +34,7 @@ static inline double max_eb_to_keep_sign_2d_online_corners_gt0(const double a, c
 		double tmp_b = - d + e;
 		double tmp_c = f;
 		double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-		if(x > 0) eb = MIN(eb, x);
+		if(x > 0) eb = MINF(eb, x);
 	}
 	{
 		// [t, -t]
@@ -41,7 +42,7 @@ static inline double max_eb_to_keep_sign_2d_online_corners_gt0(const double a, c
 		double tmp_b = d - e;
 		double tmp_c = f;
 		double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-		if(x > 0) eb = MIN(eb, x);
+		if(x > 0) eb = MINF(eb, x);
 	}
 	{
 		// [t, t]
@@ -49,7 +50,7 @@ static inline double max_eb_to_keep_sign_2d_online_corners_gt0(const double a, c
 		double tmp_b = d + e;
 		double tmp_c = f;
 		double x = (-tmp_b - sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-		if(x > 0) eb = MIN(eb, x);
+		if(x > 0) eb = MINF(eb, x);
 	}					
 	return eb;
 }
@@ -66,7 +67,7 @@ static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, c
 		double tmp_b = - d - e;
 		double tmp_c = f;
 		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-		if(x > 0) eb = MIN(eb, x);
+		if(x > 0) eb = MINF(eb, x);
 	}
 	{
 		// [-t, t]
@@ -74,7 +75,7 @@ static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, c
 		double tmp_b = - d + e;
 		double tmp_c = f;
 		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-		if(x > 0) eb = MIN(eb, x);
+		if(x > 0) eb = MINF(eb, x);
 	}
 	{
 		// [t, -t]
@@ -82,7 +83,7 @@ static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, c
 		double tmp_b = d - e;
 		double tmp_c = f;
 		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-		if(x > 0) eb = MIN(eb, x);
+		if(x > 0) eb = MINF(eb, x);
 	}
 	{
 		// [t, t]
@@ -90,39 +91,91 @@ static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, c
 		double tmp_b = d + e;
 		double tmp_c = f;
 		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
-		if(x > 0) eb = MIN(eb, x);
+		if(x > 0) eb = MINF(eb, x);
 	}							
 	return eb;
 }
 
 // maximal error bound to keep the sign of 
+// a*e1^2 + b*e1 + c
+static inline 
+double max_eb_to_keep_sign_quadratic(const double a, const double b, const double c){
+    double eb = 1;
+    if(c > 0){
+        double x = (-b - sqrt(b*b - 4*a*c))/(2*a);
+        if(x > 0) eb = MINF(eb, x);
+    }
+    else{
+        double x = (-b + sqrt(b*b - 4*a*c))/(2*a);
+        if(x > 0) eb = MINF(eb, x);        
+    }
+    return eb;
+}
+
+// maximal error bound to keep the sign of 
 // a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
-static inline double max_eb_to_keep_sign_2d_online_general(const double a, const double b, const double c, const double d, const double e, const double f){
+static inline double max_eb_to_keep_sign_2d_online_general(const double a, const double b, const double c, const double d, const double e, const double f, bool verbose=false){
 	// solve cp
 	// 2a * e1 + c * e2 + d = 0
 	// 2b * e2 + c * e1 + e = 0
 	double e1 = (-2*b*d + c*e) / (4*a*b - c*c);
 	double e2 = (-2*a*e + c*d) / (4*a*b - c*c);
+    // Hessian
+    // 2a c
+    // c  2b
+    double eb = 1;
+    double det_H = 4*a*b - c*c;
+    // if(det_H < 0) return 0;
+    if(verbose){
+        printf("f = %.7f\ne1 = %.7f, e2 = %.7f\nf(e1, e2) = %.7f\n", f, e1, e2, a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f);
+        printf("gradient: %.7f, %.7f\n", 2 * a * e1 + c * e2 + d, 2 * b * e2 + c * e1 + e);
+        printf("%.7f x*x + %.7f y*y + %.7f x*y + %.7f x +%.7f y + %.7f\n", a, b, c, d, e, f);
+    }
 	if(f > 0){
-  	// f > 0
+      	// f > 0
 		// Min(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) > 0
+        // check corners
 		double eb = max_eb_to_keep_sign_2d_online_corners_gt0(a, b, c, d, e, f);
 		if((fabs(e1) < eb) && (fabs(e2) < eb)){
 			if(a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f > 0) return 1;
 			else return 0;
 		}
-		else return eb;
+  //       if(det_H < 0){
+  //           // saddle point: need to check edges
+  //           if(b > 0){
+  //               // x = -t
+  //               if(f - (e*e)/(4*b*b) > 0){
+  //                   eb = MINF(eb, max_eb_to_keep_sign_quadratic(a - (c*c)/(4*b*b), d - (c*e)/(2*b*b), f - (e*e)/(4*b*b)));                
+  //               }
+  //               else return 0;
+  //               // x = t
+  //               if(f - (e*e)/(4*b*b) > 0){
+  //                   eb = MINF(eb, max_eb_to_keep_sign_quadratic(a - (c*c)/(4*b*b), - d + (c*e)/(2*b*b), f - (e*e)/(4*b*b)));                
+  //               }
+  //               else return 0;
+  //           }
+  //           if(a > 0){
+  //               // y = -t
+  //               // y = t
+  //           }
+  //       }
+		// else return eb;
 	}
 	else{
 		// f < 0
 		// Max(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) < 0
-		double eb = MIN(eb, max_eb_to_keep_sign_2d_online_corners_lt0(a, b, c, d, e, f));
+		double eb = MINF(eb, max_eb_to_keep_sign_2d_online_corners_lt0(a, b, c, d, e, f));
+        if(verbose) printf("eb = %.7f\n", eb);
 		if((fabs(e1) < eb) && (fabs(e2) < eb)){
 			if(a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f < 0) return 1;
 			else return 0;
 		}
-		else return eb;
+  //       if(det_H < 0){
+
+  //       }
+		// else return eb;
 	}
+    return eb;
 }
 
 /*
@@ -171,12 +224,18 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 	// M[1, 1] = -u1v0 + u0v1 + u2v1 -u3v1 
 
 	// tr(M) = -2 u1v0 + u2v0 + 2 u0v1 - u3v1 - u0v2 + u1v3
-  // det(M) = u1u1v0v0 - u1u2v0v0 - 2 u0u1v0v1 + u0u2v0v1 + u1u3v0v1 + u0u0v1v1 
-  //					- u0u3v1v1 + u0u1v0v2 - u1u3v0v2 - u0u0v1v2 + u0u3v1v2 - u1u1v0v3 
-  //						+ u1u2v0v3 + u0u1v1v3 - u0u2v1v3
+    // det(M) = u1u1v0v0 - u1u2v0v0 - 2 u0u1v0v1 + u0u2v0v1 + u1u3v0v1 + u0u0v1v1 
+    //					- u0u3v1v1 + u0u1v0v2 - u1u3v0v2 - u0u0v1v2 + u0u3v1v2 - u1u1v0v3 
+    //						+ u1u2v0v3 + u0u1v1v3 - u0u2v1v3
 	double eb = 1;
+    if(verbose){
+        printf("check delta\n");
+    }
 	if(tM * tM - 4*dM == 0){
 		// 1 double root
+        if(verbose){
+            printf("1 double root: eb = 0\n");
+        }
 		return 0;
 	}
 	else if(tM * tM - 4*dM < 0) {
@@ -195,23 +254,29 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 		 +	u0*u0*v2*v2 - 2*u1*u2*v0*v3 + 4*u0*u2*v1*v3 - 2*u1*u3*v1*v3 - 2*u0*u1*v2*v3 + u1*u1*v3*v3;
 		// keep sign of A0C1 - A1C0 = - u1v0 + u2v0 + u0v1 - u3v1 - u0v2 + u3v2 + u1v3 - u2v3
 		{
-			eb = MIN(eb, max_eb_to_keep_sign_2d_online(-u3*v1 + u3*v2, u1*v3 - u2*v3, -u1*v0 + u2*v0 + u0*v1 - u0*v2));
+			eb = MINF(eb, max_eb_to_keep_sign_2d_online(-u3*v1 + u3*v2, u1*v3 - u2*v3, -u1*v0 + u2*v0 + u0*v1 - u0*v2));
 		}
-		eb = MIN(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
+		eb = MINF(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
+        if(verbose){
+            printf("no roots: eb = %.7f\n", eb);
+        }
 	}		
 	else{
 		// tM * tM - 4*dM > 0
 		if((dM > 0) && (1 - tM + dM > 0)){
+            if(verbose){
+                printf("(dM > 0) && (1 - tM + dM > 0)\n");
+            }
 			// include 2 cases
 			if((tM < 0) || (tM >= 2)){
 				// 1) have roots but no root in [0, 1] case 1
 				// f(0) > 0, f(1) > 0, Tr(M)/2 not in [0, 1]
 			  // keep sign of f(0) = dM
 			  {
-				  double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
-				  double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
-				  double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
-				  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));		  	
+                    double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
+                    double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
+                    double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
+                    eb = MINF(eb, max_eb_to_keep_sign_2d_online(a, b, c));		  	
 			  }				
 			  // keep sign of f(1) = 1 - tM + dM
 			  // (- u1v0 + u2v0 + u0v1 - u3v1 - u0v2 + u3v2 + u1v3 - u2v3) ** 2 -
@@ -220,30 +285,30 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 			  // = - u1u3v0v2 + u2u3v0v2 + u0u3v1v2 - u3u3v1v2 - u0u3v2v2 + u3u3v2v2 + u1u2v0v3 - u2u2v0v3 - u0u2v1v3
 				// 	+ u2u3v1v3 + u0u2v2v3 + u1u3v2v3 - 2 u2u3v2v3 - u1u2v3v3 + u2u2v3v3
 			  {
-			  	double a = u3*u3*v2*v2 - u3*u3*v1*v2;
-			  	double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
-			  	double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
-			  	double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
-			  	double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
-			  	double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
-											+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
-					eb = MIN(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
+                    double a = u3*u3*v2*v2 - u3*u3*v1*v2;
+                    double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
+                    double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+                    double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+                    double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
+                    double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
+                    						+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
+					eb = MINF(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
 			  }
 			  {
 					// keep sign of A0C1 - A1C0 = - u1v0 + u2v0 + u0v1 - u3v1 - u0v2 + u3v2 + u1v3 - u2v3
-					eb = MIN(eb, max_eb_to_keep_sign_2d_online(-u3*v1 + u3*v2, u1*v3 - u2*v3, -u1*v0 + u2*v0 + u0*v1 - u0*v2));
-				  // keep sign of tM 
-				  double a = - u3*v1;
-				  double b = u1*v3;
-				  double c = -2*u1*v0 + u2*v0 + 2*u0*v1 - u0*v2;
-				  double eb1 = max_eb_to_keep_sign_2d_online(a, b, c);
-				  // keep sign of tr(M) - 2(A0C1 - A1C0)
-				  a -= 2*(- u3*v1 + u3*v2);
-				  b -= 2*(u1*v3 - u2*v3);
-				  c -= 2*(- u1*v0 + u2*v0 + u0*v1 - u0*v2);
-				  double eb2 = max_eb_to_keep_sign_2d_online(a, b, c);
-				  // only need to keep either 
-				  eb = MIN(eb, MAX(eb1, eb2));
+					eb = MINF(eb, max_eb_to_keep_sign_2d_online(-u3*v1 + u3*v2, u1*v3 - u2*v3, -u1*v0 + u2*v0 + u0*v1 - u0*v2));
+                    // keep sign of tM 
+                    double a = - u3*v1;
+                    double b = u1*v3;
+                    double c = -2*u1*v0 + u2*v0 + 2*u0*v1 - u0*v2;
+                    double eb1 = max_eb_to_keep_sign_2d_online(a, b, c);
+                    // keep sign of tr(M) - 2(A0C1 - A1C0)
+                    a -= 2*(- u3*v1 + u3*v2);
+                    b -= 2*(u1*v3 - u2*v3);
+                    c -= 2*(- u1*v0 + u2*v0 + u0*v1 - u0*v2);
+                    double eb2 = max_eb_to_keep_sign_2d_online(a, b, c);
+                    // only need to keep either 
+                    eb = MINF(eb, MAX(eb1, eb2));
 			  }
 			}
 			else{
@@ -259,88 +324,101 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 					double f = u2*u2*v0*v0 - 2*u2*u3*v0*v1 + u3*u3*v1*v1 - 2*u0*u2*v0*v2 + 4*u1*u3*v0*v2 - 2*u0*u3*v1*v2
 					 +	u0*u0*v2*v2 - 2*u1*u2*v0*v3 + 4*u0*u2*v1*v3 - 2*u1*u3*v1*v3 - 2*u0*u1*v2*v3 + u1*u1*v3*v3;
 					// = a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f > 0
-					eb = MIN(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
+					eb = MINF(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
 				}
-			  // keep sign of f(0) = dM
-			  {
-				  double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
-				  double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
-				  double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
-				  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));		  	
-			  }
-			  // tr(M) = (-2 u1v0 + u2v0 + 2 u0v1 - u3v1 - u0v2 + u1v3) / (- u1v0 + u2v0 + u0v1 - u3v1 - u0v2 + u3v2 + u1v3 - u2v3)
-			  {
+                // keep sign of f(0) = dM
+                {
+                    double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
+                    double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
+                    double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
+                    eb = MINF(eb, max_eb_to_keep_sign_2d_online(a, b, c));		  	
+                }
+                // tr(M) = (-2 u1v0 + u2v0 + 2 u0v1 - u3v1 - u0v2 + u1v3) / (- u1v0 + u2v0 + u0v1 - u3v1 - u0v2 + u3v2 + u1v3 - u2v3)
+                {
 					// keep sign of A0C1 - A1C0 = - u1v0 + u2v0 + u0v1 - u3v1 - u0v2 + u3v2 + u1v3 - u2v3
-					eb = MIN(eb, max_eb_to_keep_sign_2d_online(-u3*v1 + u3*v2, u1*v3 - u2*v3, -u1*v0 + u2*v0 + u0*v1 - u0*v2));
-				  // keep sign of tM 
-				  double a = - u3*v1;
-				  double b = u1*v3;
-				  double c = -2*u1*v0 + u2*v0 + 2*u0*v1 - u0*v2;
-				  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));
-				  // keep sign of tr(M) - 2(A0C1 - A1C0)
-				  a -= 2*(- u3*v1 + u3*v2);
-				  b -= 2*(u1*v3 - u2*v3);
-				  c -= 2*(- u1*v0 + u2*v0 + u0*v1 - u0*v2);
-				  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));
-			  }
-			  // keep sign of f(1) = 1 - tM + dM
-			  {
-			  	double a = u3*u3*v2*v2 - u3*u3*v1*v2;
-			  	double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
-			  	double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
-			  	double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
-			  	double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
-			  	double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
-											+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
-					eb = MIN(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
-			  }
-			}
+					eb = MINF(eb, max_eb_to_keep_sign_2d_online(-u3*v1 + u3*v2, u1*v3 - u2*v3, -u1*v0 + u2*v0 + u0*v1 - u0*v2));
+                    // keep sign of tM 
+                    double a = - u3*v1;
+                    double b = u1*v3;
+                    double c = -2*u1*v0 + u2*v0 + 2*u0*v1 - u0*v2;
+                    eb = MINF(eb, max_eb_to_keep_sign_2d_online(a, b, c));
+                    // keep sign of tr(M) - 2(A0C1 - A1C0)
+                    a -= 2*(- u3*v1 + u3*v2);
+                    b -= 2*(u1*v3 - u2*v3);
+                    c -= 2*(- u1*v0 + u2*v0 + u0*v1 - u0*v2);
+                    eb = MINF(eb, max_eb_to_keep_sign_2d_online(a, b, c));
+                }
+                // keep sign of f(1) = 1 - tM + dM
+                {
+                    double a = u3*u3*v2*v2 - u3*u3*v1*v2;
+                    double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
+                    double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+                    double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+                    double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
+                    double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
+                    						+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
+                    eb = MINF(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
+                }
+            }
 		}
 		else if((dM < 0) && (1 - tM + dM < 0)){
+            if(verbose){
+                printf("(dM < 0) && (1 - tM + dM < 0)\n");
+            }
 			// have roots but no root in [0, 1] case 2
 			// f(0) < 0, f(1) < 0
 			// keep sign of f(0) = dM
-		  {
-			  double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
-			  double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
-			  double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
-			  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));		  	
-		  }
+            {
+                double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
+                double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
+                double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
+                auto tmp_eb = max_eb_to_keep_sign_2d_online(a, b, c);
+                eb = MINF(eb, tmp_eb);		
+                if(verbose) printf("tmp_eb = %.7f\n", tmp_eb);  	
+            }
 			// keep sign of f(1) = 1 - tM + dM
-		  {
-		  	double a = u3*u3*v2*v2 - u3*u3*v1*v2;
-		  	double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
-		  	double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
-		  	double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
-		  	double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
-		  	double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
-										+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
-		  	// f < 0
-		  	eb = MIN(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
-		  }
+            {
+                double a = u3*u3*v2*v2 - u3*u3*v1*v2;
+                double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
+                double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+                double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+                double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
+                double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
+                						+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
+                // f < 0
+                auto tmp_eb = max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f, verbose);
+                eb = MINF(eb, tmp_eb);
+                if(verbose) printf("tmp_eb = %.7f\n", tmp_eb);      
+            }
 		}
 		else{
+            if(verbose){
+                printf("dM * (1 - tM + dM) < 0\n");
+            }
 			// dM * (1 - tM + dM) < 0
 			// one root in [0, 1]
 			// keep sign of f(0) = dM
-		  {
-			  double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
-			  double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
-			  double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
-			  eb = MIN(eb, max_eb_to_keep_sign_2d_online(a, b, c));		  	
-		  }
-		  // keep sign of f(1) = (1 - tM + dM)
-		  {
-		  	double a = u3*u3*v2*v2 - u3*u3*v1*v2;
-		  	double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
-		  	double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
-		  	double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
-		  	double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
-		  	double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
-										+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
-				eb = MIN(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
-		  }
+            {
+                double a = u1*u3*v0*v1 - u0*u3*v1*v1 - u1*u3*v0*v2 + u0*u3*v1*v2;
+                double b = - u1*u1*v0*v3 + u1*u2*v0*v3 + u0*u1*v1*v3 - u0*u2*v1*v3;
+                double c = u1*u1*v0*v0 - u1*u2*v0*v0 - 2*u0*u1*v0*v1 + u0*u2*v0*v1 + u0*u0*v1*v1 + u0*u1*v0*v2 - u0*u0*v1*v2; 
+                eb = MINF(eb, max_eb_to_keep_sign_2d_online(a, b, c));		  	
+            }
+            // keep sign of f(1) = (1 - tM + dM)
+            {
+                double a = u3*u3*v2*v2 - u3*u3*v1*v2;
+                double b = - u1*u2*v3*v3 + u2*u2*v3*v3;
+                double c = u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+                double d = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - 2*u3*u3*v1*v2 - u0*u3*v2*v2 + 2*u3*u3*v2*v2 + u2*u3*v1*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3;
+                double e = u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3	+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - 2*u1*u2*v3*v3 + 2*u2*u2*v3*v3;
+                double f = - u1*u3*v0*v2 + u2*u3*v0*v2 + u0*u3*v1*v2 - u3*u3*v1*v2 - u0*u3*v2*v2 + u3*u3*v2*v2 + u1*u2*v0*v3 - u2*u2*v0*v3 - u0*u2*v1*v3
+                						+ u2*u3*v1*v3 + u0*u2*v2*v3 + u1*u3*v2*v3 - 2*u2*u3*v2*v3 - u1*u2*v3*v3 + u2*u2*v3*v3;
+                eb = MINF(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
+            }
 		}
+        if(verbose){
+            printf("1 root: eb = %.7f\n", eb);
+        }
 	}
 	// need to check x and type
 	return eb;
@@ -519,6 +597,7 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 	convertIntArray2ByteArray_fast_1b_to_result_sz(sign_map, num_elements, sign_map_compressed_pos);
 	free(sign_map);
 
+    double * eb = (double *) malloc(num_elements*sizeof(double));
 	T * decompressed_U = (T *) malloc(num_elements*sizeof(T));
 	memcpy(decompressed_U, U, num_elements*sizeof(T));
 	T * decompressed_V = (T *) malloc(num_elements*sizeof(T));
@@ -571,6 +650,9 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 	T * cur_log_V_pos = log_V;
 	T * cur_U_pos = decompressed_U;
 	T * cur_V_pos = decompressed_V;
+
+    int index_eb = 0;
+    int failed_verification = 0;
 	for(int i=0; i<r1; i++){
 		// printf("start %d row\n", i);
 		for(int j=0; j<r2; j++){
@@ -587,11 +669,22 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 					}
 				}
 				if(in_mesh){
-					required_eb = MIN(required_eb, derive_cp_eb_bilinear_online(cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], cur_U_pos[0],
-						cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], cur_V_pos[0]));
+                    bool verbose = false;
+                    if((i == 8) && (j == 2909)){
+                        verbose = true;
+                        printf("k = %d\n", k);
+                    }
+                    auto derived_eb = derive_cp_eb_bilinear_online(cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], cur_U_pos[0],
+                        cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], cur_V_pos[0], verbose);
+					required_eb = MINF(required_eb, derived_eb);
+                    if((i == 8) && (j == 2909)){
+                        printf("U: %.7f, %.7f, %.7f, %.7f\n", cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], cur_U_pos[0]);
+                        printf("V: %.7f, %.7f, %.7f, %.7f\n", cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], cur_V_pos[0]);
+                        printf("required_eb = %.7f\n\n", required_eb);
+                    }
 				}
 			}
-			// eb[index_eb++] = required_eb;
+			eb[index_eb++] = required_eb;
 			if((required_eb > 0) && (*cur_U_pos != 0) && (*cur_V_pos != 0)){
 				bool unpred_flag = false;
 				T decompressed[2];
@@ -638,6 +731,7 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 						double decompressed_v = (cur_V_pos[0] > 0) ? exp2(decompressed[1]) : -exp2(decompressed[1]);
 						{
 							// k = 0
+                            // need to deal with k separately due to different relative vertex positions
 							{
 								int k = 0;
 								// if(verbose) std::cout << k << ":\n";
@@ -733,6 +827,8 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 									// if(verbose) std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
 								}
 							}
+                            // record number of failed verification
+                            if(unpred_flag) failed_verification ++;
 						}
 					}
 				}
@@ -767,6 +863,7 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 			cur_U_pos ++, cur_V_pos ++;
 		}
 	}
+    printf("#Failed verification = %d\n", failed_verification);
 	// writefile("eb_2d.dat", eb, num_elements);
 	// free(eb);
 	free(log_U);
