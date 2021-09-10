@@ -420,6 +420,16 @@ inline double max_eb_to_keep_type_online(const T u0, const T u1, const T u2, con
 	T C = (-m) * (u0*v1 - u0*v2 + u1*v2 - u1*v0 + u2*v0 - u2*v1);
 	if(C <= 0) return eb;
 	{
+	    // keep sign for B
+	    // coeff[0] = c[0]*u0;
+	    // coeff[1] = c[1]*u1;
+	    // coeff[2] = - (c[1] + c[0])*u2;
+	    // coeff[3] = c[2]*v0;
+	    // coeff[4] = c[3]*v1;
+	    // coeff[5] = - (c[3] + c[2])*v2;
+	    eb = max_eb_to_keep_sign_2d_online(-c[0]*u2 - c[1]*u2, -c[2]*v2 - c[3]*v2, c[0]*u0 + c[1]*u1 + c[2]*v0 + c[3]*v1);
+	}
+	{
 		// Note that meaning of B in the rhs changes here
 		// keep sign for B^2 - 4*C
 		// B = A*(1+e_1) + B*(1+e_2) + C
@@ -433,16 +443,6 @@ inline double max_eb_to_keep_type_online(const T u0, const T u1, const T u2, con
 		double delta = C*C - 4*F;
 		if(delta == 0) return 0;
 		else if(delta > 0){
-            {
-                // keep sign for B
-                // coeff[0] = c[0]*u0;
-                // coeff[1] = c[1]*u1;
-                // coeff[2] = - (c[1] + c[0])*u2;
-                // coeff[3] = c[2]*v0;
-                // coeff[4] = c[3]*v1;
-                // coeff[5] = - (c[3] + c[2])*v2;
-                eb = max_eb_to_keep_sign_2d_online(-c[0]*u2 - c[1]*u2, -c[2]*v2 - c[3]*v2, c[0]*u0 + c[1]*u1 + c[2]*v0 + c[3]*v1);
-            }
 			// (|2AC' - 4D| + |2BC' - 4E|)* -e + delta > 0
 			if((fabs(2*A*C - 4*D) + fabs(2*B*C - 4*E)) == 0) eb = 1;
 			else eb = MINF(eb, delta/(fabs(2*A*C - 4*D) + fabs(2*B*C - 4*E)));
