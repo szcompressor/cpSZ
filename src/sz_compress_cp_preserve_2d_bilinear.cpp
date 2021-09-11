@@ -58,7 +58,8 @@ static inline double max_eb_to_keep_sign_2d_online_corners_gt0(const double a, c
 // maximal error bound to keep the sign of 
 // a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
 // when f < 0
-static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, const double b, const double c, const double d, const double e, const double f){
+static inline 
+double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, const double b, const double c, const double d, const double e, const double f, bool verbose=false){
 	double eb = 1;
 	{
 		// [-t, -t]
@@ -68,6 +69,7 @@ static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, c
 		double tmp_c = f;
 		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
 		if(x > 0) eb = MINF(eb, x);
+        if(verbose) printf("[-t, -t]: eb = %.7f, f(x) = %.7f x^2 + %.7f x + %.7f\n", eb, tmp_a, tmp_b, tmp_c);
 	}
 	{
 		// [-t, t]
@@ -76,6 +78,7 @@ static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, c
 		double tmp_c = f;
 		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
 		if(x > 0) eb = MINF(eb, x);
+        if(verbose) printf("[-t, t]: eb = %.7f, f(x) = %.7f x^2 + %.7f x + %.7f\n", eb, tmp_a, tmp_b, tmp_c);
 	}
 	{
 		// [t, -t]
@@ -84,6 +87,7 @@ static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, c
 		double tmp_c = f;
 		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
 		if(x > 0) eb = MINF(eb, x);
+        if(verbose) printf("[t, -t]: eb = %.7f, f(x) = %.7f x^2 + %.7f x + %.7f\n", eb, tmp_a, tmp_b, tmp_c);
 	}
 	{
 		// [t, t]
@@ -92,7 +96,9 @@ static inline double max_eb_to_keep_sign_2d_online_corners_lt0(const double a, c
 		double tmp_c = f;
 		double x = (-tmp_b + sqrt(tmp_b*tmp_b - 4*tmp_a*tmp_c))/(2*tmp_a);
 		if(x > 0) eb = MINF(eb, x);
+        if(verbose) printf("[t, t]: eb = %.7f, f(x) = %.7f x^2 + %.7f x + %.7f\n", eb, tmp_a, tmp_b, tmp_c);
 	}							
+    if(verbose) printf("Returned eb lt0 = %.7f\n", eb);
 	return eb;
 }
 
@@ -114,65 +120,226 @@ double max_eb_to_keep_sign_quadratic(const double a, const double b, const doubl
 
 // maximal error bound to keep the sign of 
 // a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
+// if the qudratic form forms a parabolic cylinder (i.e., 4ab - c^2 = 0)
+static inline double max_eb_to_keep_sign_2d_online_quadratic_cylinder(const double a, const double b, const double c, const double d, const double e, const double f, bool verbose=false){
+    if(verbose){
+        printf("%.7f x*x + %.7f y*y + %.7f x*y + %.7f x +%.7f y + %.7f\n", a, b, c, d, e, f);
+    }
+    double eb = 1;
+    // return 0;
+    if(f > 0){
+        // f > 0
+        // Min(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) > 0
+        // double eb = MINF(eb, max_eb_to_keep_sign_2d_online_corners_gt0(a, b, c, d, e, f));
+        eb = MINF(eb, f/(fabs(d) + fabs(e)));
+    }
+    else{
+        // f < 0
+        // Max(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) < 0
+        eb = MINF(eb, max_eb_to_keep_sign_2d_online_corners_lt0(a, b, c, d, e, f, verbose));
+    }
+    return eb;
+}
+
+// maximal error bound to keep the sign of 
+// a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f
 static inline double max_eb_to_keep_sign_2d_online_general(const double a, const double b, const double c, const double d, const double e, const double f, bool verbose=false){
 	// solve cp
 	// 2a * e1 + c * e2 + d = 0
 	// 2b * e2 + c * e1 + e = 0
-	double e1 = (-2*b*d + c*e) / (4*a*b - c*c);
-	double e2 = (-2*a*e + c*d) / (4*a*b - c*c);
+	// double e1 = (-2*b*d + c*e) / (4*a*b - c*c);
+	// double e2 = (-2*a*e + c*d) / (4*a*b - c*c);
     // Hessian
     // 2a c
     // c  2b
-    double eb = 1;
     double det_H = 4*a*b - c*c;
-    // if(det_H < 0) return 0;
-    if(verbose){
-        printf("f = %.7f\ne1 = %.7f, e2 = %.7f\nf(e1, e2) = %.7f\n", f, e1, e2, a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f);
-        printf("gradient: %.7f, %.7f\n", 2 * a * e1 + c * e2 + d, 2 * b * e2 + c * e1 + e);
-        printf("%.7f x*x + %.7f y*y + %.7f x*y + %.7f x +%.7f y + %.7f\n", a, b, c, d, e, f);
-    }
+    double eb = max_eb_to_keep_sign_2d_online_quadratic_cylinder(a, b, c, d, e, f);
+    if(det_H >= 0) return eb;
+    // det_H < 0
+    // saddle point: need to check edges
+    // if(verbose){
+    //     printf("f = %.7f\ne1 = %.7f, e2 = %.7f\nf(e1, e2) = %.7f\n", f, e1, e2, a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f);
+    //     printf("gradient: %.7f, %.7f\n", 2 * a * e1 + c * e2 + d, 2 * b * e2 + c * e1 + e);
+    //     printf("%.7f x*x + %.7f y*y + %.7f x*y + %.7f x +%.7f y + %.7f\n", a, b, c, d, e, f);
+    // }
 	if(f > 0){
       	// f > 0
 		// Min(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) > 0
-        // check corners
-		double eb = max_eb_to_keep_sign_2d_online_corners_gt0(a, b, c, d, e, f);
-		if((fabs(e1) < eb) && (fabs(e2) < eb)){
-			if(a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f > 0) return 1;
-			else return 0;
-		}
-  //       if(det_H < 0){
-  //           // saddle point: need to check edges
-  //           if(b > 0){
-  //               // x = -t
-  //               if(f - (e*e)/(4*b*b) > 0){
-  //                   eb = MINF(eb, max_eb_to_keep_sign_quadratic(a - (c*c)/(4*b*b), d - (c*e)/(2*b*b), f - (e*e)/(4*b*b)));                
-  //               }
-  //               else return 0;
-  //               // x = t
-  //               if(f - (e*e)/(4*b*b) > 0){
-  //                   eb = MINF(eb, max_eb_to_keep_sign_quadratic(a - (c*c)/(4*b*b), - d + (c*e)/(2*b*b), f - (e*e)/(4*b*b)));                
-  //               }
-  //               else return 0;
-  //           }
-  //           if(a > 0){
-  //               // y = -t
-  //               // y = t
-  //           }
-  //       }
-		// else return eb;
+        if(b > 0){
+            double eb1 = 0, eb2 = 0;
+            // x = t
+            // check y0 = - (ct + e)/(2b)
+            // y0 < -t
+            if(2*b - c > 0){
+                eb1 = MAX(0, e / (2*b - c));
+            }
+            else{
+                if(e > 0) eb1 = 1;
+            }
+            // y0 > t
+            if(2*b + c > 0){
+                eb1 = MAX(eb1, -e / (2*b + c));
+            }
+            else{
+                if(e < 0) eb1 = 1;
+            }
+            // y0 in [-t, t]
+            if(f - (e*e)/(4*b) > 0){
+                eb2 = max_eb_to_keep_sign_quadratic(a - (c*c)/(4*b), d - (c*e)/(2*b), f - (e*e)/(4*b));
+            }
+            eb = MIN(eb, MAX(eb1, eb2));
+            // x = -t
+            // check y = - (-ct + e)/(2b)
+            // y0 < -t
+            if(2*b + c > 0){
+                eb1 = MAX(0, e / (2*b + c));
+            }
+            else{
+                if(e > 0) eb1 = 1;
+            }
+            // y0 > t
+            if(2*b - c > 0){
+                eb1 = MAX(eb1, -e / (2*b - c));
+            }
+            else{
+                if(e < 0) eb1 = 1;
+            }
+            // y0 in [-t, t]
+            if(f - (e*e)/(4*b) > 0){
+                eb2 = max_eb_to_keep_sign_quadratic(a - (c*c)/(4*b), - d + (c*e)/(2*b), f - (e*e)/(4*b));
+            }
+            eb = MIN(eb, MAX(eb1, eb2));
+        }
+        if(a > 0){
+            double eb1 = 0, eb2 = 0;
+            // y = t
+            // check x0 = - (ct + d)/(2a)
+            // x0 < -t
+            if(2*a - c > 0){
+                eb1 = MAX(0, d / (2*a - c));
+            }
+            else{
+                if(d > 0) eb1 = 1;
+            }
+            // x0 > t
+            if(2*a + c > 0){
+                eb1 = MAX(eb1, -d / (2*a + c));
+            }
+            else{
+                if(d < 0) eb1 = 1;
+            }
+            // x0 in [-t, t]
+            if(f - (d*d)/(4*a) > 0){
+                eb2 = max_eb_to_keep_sign_quadratic(b - (c*c)/(4*a), e - (c*d)/(2*a), f - (d*d)/(4*a));
+            }
+            eb = MIN(eb, MAX(eb1, eb2));
+            // y = -t
+            // check x0 = - (-ct + d)/(2a)
+            // x0 < -t
+            if(2*a + c > 0){
+                eb1 = MAX(0, d / (2*a + c));
+            }
+            else{
+                if(d > 0) eb1 = 1;
+            }
+            // x0 > t
+            if(2*a - c > 0){
+                eb1 = MAX(eb1, -d / (2*a + c));
+            }
+            else{
+                if(d < 0) eb1 = 1;
+            }
+            // x0 in [-t, t]
+            if(f - (d*d)/(4*a) > 0){
+                eb2 = max_eb_to_keep_sign_quadratic(b - (c*c)/(4*a), -e + (c*d)/(2*a), f - (d*d)/(4*a));
+            }
+        }
 	}
 	else{
 		// f < 0
 		// Max(a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f) < 0
-		double eb = MINF(eb, max_eb_to_keep_sign_2d_online_corners_lt0(a, b, c, d, e, f));
-        if(verbose) printf("eb = %.7f\n", eb);
-		if((fabs(e1) < eb) && (fabs(e2) < eb)){
-			if(a*e1*e1 + b*e2*e2 + c*e1*e2 + d*e1 + e*e2 + f < 0) return 1;
-			else return 0;
-		}
-  //       if(det_H < 0){
-
-  //       }
+        if(b < 0){
+            double eb1 = 0, eb2 = 0;
+            // x = -t
+            if(- 2*b - c > 0){
+                eb1 = MAX(0, e / (- 2*b - c));
+            }
+            else{
+                if(e > 0) eb1 = 1;
+            }
+            if(- 2*b + c > 0){
+                eb1 = MAX(eb1, - e / (- 2*b + c));
+            }
+            else{
+                if(e < 0) eb1 = 1;
+            }
+            if(f + (e*e)/(-4*b) < 0){
+                eb2 = max_eb_to_keep_sign_quadratic(a + (c*c)/(-4*b), d + (c*e)/(-2*b), f + (e*e)/(-4*b));
+            }
+            eb = MIN(eb, MAX(eb1, eb2));
+            // x = t
+            if(- 2*b + c > 0){
+                eb1 = MAX(0, e / (- 2*b + c));
+            }
+            else{
+                if(e > 0) eb1 = 1;
+            }
+            if(- 2*b - c > 0){
+                eb1 = MAX(eb1, -e / (- 2*b - c));
+            }
+            else{
+                if(e < 0) eb1 = 1;
+            }
+            if(f + (e*e)/(-4*b) < 0){
+                eb2 = max_eb_to_keep_sign_quadratic(a + (c*c)/(-4*b), - d - (c*e)/(-2*b), f + (e*e)/(-4*b));
+            }
+            eb = MIN(eb, MAX(eb1, eb2));
+        }
+        if(a < 0){
+            double eb1 = 0, eb2 = 0;
+            // y = t
+            // check x0 = - (ct + d)/(2a)
+            // x0 < -t
+            if(- 2*a - c > 0){
+                eb1 = MAX(0, d / (- 2*a - c));
+            }
+            else{
+                if(d > 0) eb1 = 1;
+            }
+            // x0 > t
+            if(- 2*a + c > 0){
+                eb1 = MAX(eb1, -d / (- 2*a + c));
+            }
+            else{
+                if(d < 0) eb1 = 1;
+            }
+            // x0 in [-t, t]
+            if(f + (d*d)/(-4*a) < 0){
+                eb2 = max_eb_to_keep_sign_quadratic(b + (c*c)/(-4*a), e + (c*d)/(-2*a), f + (d*d)/(-4*a));
+            }
+            eb = MIN(eb, MAX(eb1, eb2));
+            // y = -t
+            // check x0 = - (-ct + d)/(2a)
+            // x0 < -t
+            if(- 2*a + c > 0){
+                eb1 = MAX(0, d / (- 2*a + c));
+            }
+            else{
+                if(d > 0) eb1 = 1;
+            }
+            // x0 > t
+            if(- 2*a - c > 0){
+                eb1 = MAX(eb1, -d / (- 2*a + c));
+            }
+            else{
+                if(d < 0) eb1 = 1;
+            }
+            // x0 in [-t, t]
+            if(f + (d*d)/(-4*a) < 0){
+                eb2 = max_eb_to_keep_sign_quadratic(b + (c*c)/(-4*a), -e - (c*d)/(-2*a), f + (d*d)/(-4*a));
+            }
+            eb = MIN(eb, MAX(eb1, eb2));     
+        }
 		// else return eb;
 	}
     return eb;
@@ -229,7 +396,8 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
     //						+ u1u2v0v3 + u0u1v1v3 - u0u2v1v3
 	double eb = 1;
     if(verbose){
-        printf("check delta\n");
+        printf("check delta: tM * tM - 4*dM = %.7f, A0C1 - A1C0 = %.7f\n", tM * tM - 4*dM, A0C1_minus_A1C0);
+        printf("unormalized delta = %.7f\n", (tM * tM - 4*dM)*A0C1_minus_A1C0*A0C1_minus_A1C0);
     }
 	if(tM * tM - 4*dM == 0){
 		// 1 double root
@@ -256,9 +424,10 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 		{
 			eb = MINF(eb, max_eb_to_keep_sign_2d_online(-u3*v1 + u3*v2, u1*v3 - u2*v3, -u1*v0 + u2*v0 + u0*v1 - u0*v2));
 		}
-		eb = MINF(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
+        auto tmp_eb = max_eb_to_keep_sign_2d_online_quadratic_cylinder(a, b, c, d, e, f, verbose);
+		eb = MINF(eb, tmp_eb);
         if(verbose){
-            printf("no roots: eb = %.7f\n", eb);
+            printf("no roots: eb = %.7f, tmp_eb = %.7f\n", eb, tmp_eb);
         }
 	}		
 	else{
@@ -324,7 +493,7 @@ derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, 
 					double f = u2*u2*v0*v0 - 2*u2*u3*v0*v1 + u3*u3*v1*v1 - 2*u0*u2*v0*v2 + 4*u1*u3*v0*v2 - 2*u0*u3*v1*v2
 					 +	u0*u0*v2*v2 - 2*u1*u2*v0*v3 + 4*u0*u2*v1*v3 - 2*u1*u3*v1*v3 - 2*u0*u1*v2*v3 + u1*u1*v3*v3;
 					// = a*e1^2 + b*e2^2 + c*e1e2 + d*e1 + e*e2 + f > 0
-					eb = MINF(eb, max_eb_to_keep_sign_2d_online_general(a, b, c, d, e, f));
+					eb = MINF(eb, max_eb_to_keep_sign_2d_online_quadratic_cylinder(a, b, c, d, e, f));
 				}
                 // keep sign of f(0) = dM
                 {
@@ -670,14 +839,14 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 				}
 				if(in_mesh){
                     bool verbose = false;
-                    if((i == 8) && (j == 2909)){
+                    if((i == 210) && (j == 221)){
                         verbose = true;
                         printf("k = %d\n", k);
                     }
                     auto derived_eb = derive_cp_eb_bilinear_online(cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], cur_U_pos[0],
                         cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], cur_V_pos[0], verbose);
 					required_eb = MINF(required_eb, derived_eb);
-                    if((i == 8) && (j == 2909)){
+                    if((i == 210) && (j == 221)){
                         printf("U: %.7f, %.7f, %.7f, %.7f\n", cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], cur_U_pos[0]);
                         printf("V: %.7f, %.7f, %.7f, %.7f\n", cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], cur_V_pos[0]);
                         printf("required_eb = %.7f\n\n", required_eb);
@@ -752,7 +921,17 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 									int nroots_ = bilinear_extract_critical_point(cur_U_pos[-1 - r2], cur_U_pos[-r2], decompressed_u, cur_U_pos[-1],
 										cur_V_pos[-1 - r2], cur_V_pos[-r2], decompressed_v, cur_V_pos[-1], J_);
 									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
-									// if(verbose) std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+									if(unpred_flag){
+                                        printf("i = %d, j = %d, k = %d\n", i, j, k);
+                                        std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                        verbose = true;
+                                        printf("~~~~~~~~~~\n");
+                                        derive_cp_eb_bilinear_online(cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], decompressed_u,
+                                        cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], decompressed_v, verbose);
+                                        printf("U: %.7f, %.7f, %.7f, %.7f\n", cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], decompressed_u);
+                                        printf("V: %.7f, %.7f, %.7f, %.7f\n", cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], decompressed_v);
+                                        printf("x = %.7f, y = %.7f\n", decompressed_u/cur_U_pos[0] - 1, decompressed_v/cur_V_pos[0] - 1);
+                                    }
 								}
 							}
 							if(!unpred_flag){
@@ -776,7 +955,10 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 									int nroots_ = bilinear_extract_critical_point(cur_U_pos[-1], decompressed_u, cur_U_pos[r2], cur_U_pos[r2 - 1],
 										cur_V_pos[-1], decompressed_v, cur_V_pos[r2], cur_V_pos[r2 - 1], J_);
 									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
-									// if(verbose) std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                    if(unpred_flag){
+                                        printf("i = %d, j = %d, k = %d\n", i, j, k);
+                                        std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                    }
 								}
 							}
 							if(!unpred_flag){
@@ -800,7 +982,10 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 									int nroots_ = bilinear_extract_critical_point(decompressed_u, cur_U_pos[1], cur_U_pos[r2 + 1], cur_U_pos[r2],
 										decompressed_v, cur_V_pos[1], cur_V_pos[r2 + 1], cur_V_pos[r2], J_);
 									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
-									// if(verbose) std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                    if(unpred_flag){
+                                        printf("i = %d, j = %d, k = %d\n", i, j, k);
+                                        std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                    }
 								}
 							}
 							if(!unpred_flag){
@@ -824,7 +1009,10 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 									int nroots_ = bilinear_extract_critical_point(cur_U_pos[- r2], cur_U_pos[-r2 + 1], cur_U_pos[1], decompressed_u,
 										cur_V_pos[- r2], cur_V_pos[-r2 + 1], cur_V_pos[1], decompressed_v, J_);
 									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
-									// if(verbose) std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                    if(unpred_flag){
+                                        printf("i = %d, j = %d, k = %d\n", i, j, k);
+                                        std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                    }
 								}
 							}
                             // record number of failed verification
