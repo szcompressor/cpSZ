@@ -354,6 +354,7 @@ rotate to make (u3, v3) appear only once in A, B, C, D
 */
 static double 
 derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, const double u3, const double v0, const double v1, const double v2, const double v3, bool verbose=false){
+	return 1;
 	// f(u) = A0 xy + B0 x + C0 y + D0
 	// f(v) = A1 xy + B1 x + C1 y + D1
 	// solve 
@@ -743,9 +744,10 @@ bilinear_verify_critical_point(int nroots, const double J[2][2][2], double J_[2]
 		if(verbose){
 			std::cout << get_cp_type(delta, eig) << " " << get_cp_type(delta_, eig_) << std::endl;
 		}
-		if(delta * delta_ < 0) return false;
-		if(eig[0].real() * eig_[0].real() < 0) return false;
-		if(eig[1].real() * eig_[1].real() < 0) return false;	
+		if(get_cp_type(delta, eig) != get_cp_type(delta_, eig_)) return false;
+		// if(delta * delta_ < 0) return false;
+		// if(eig[0].real() * eig_[0].real() < 0) return false;
+		// if(eig[1].real() * eig_[1].real() < 0) return false;	
 	}
 	return true;
 }
