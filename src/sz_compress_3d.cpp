@@ -529,7 +529,7 @@ prediction_and_quantization_3d_with_border_prediction_with_eb(const T * data, co
 			pred_buffer_pos += size.block_size*buffer_dim1_offset - size.block_size*size.num_z;
 		}
 		// copy bottom of buffer to top of buffer
-		memcpy(pred_buffer, pred_buffer + size.block_size*buffer_dim0_offset, buffer_dim0_offset*sizeof(T));
+		// memcpy(pred_buffer, pred_buffer + size.block_size*buffer_dim0_offset, buffer_dim0_offset*sizeof(T));
 		x_data_pos += size.block_size*size.dim0_offset;
 	}
 	free(pred_buffer);
@@ -549,8 +549,11 @@ sz_compress_3d_with_eb(const T * data, const double * precisions, size_t r1, siz
 	capacity = 32768;
 	meanInfo<T> mean_info;
 	int intv_radius = (capacity >> 1);
+	// assign data buffer address
+	// HARDCODE
+	db_f = reinterpret_cast<const float *>(data);
 	int * type = (int *) malloc(size.num_elements * sizeof(int));
-	T * unpredictable_data = (T *) malloc((0.05*size.num_elements) * sizeof(T));
+	T * unpredictable_data = (T *) malloc((size.num_elements) * sizeof(T));
 	unsigned char * indicator = (unsigned char *) malloc(size.num_blocks * sizeof(unsigned char));
 	T * unpredictable_data_pos = unpredictable_data;
 	int * reg_params_type = (int *) malloc(RegCoeffNum3d * size.num_blocks * sizeof(int));
@@ -567,7 +570,7 @@ sz_compress_3d_with_eb(const T * data, const double * precisions, size_t r1, siz
 	// write_variable_to_dst(compressed_pos, precision);
 	write_variable_to_dst(compressed_pos, (char) block_independant);
 	write_variable_to_dst(compressed_pos, intv_radius);
-	write_variable_to_dst(compressed_pos, mean_info);
+	// write_variable_to_dst(compressed_pos, mean_info);
 	write_variable_to_dst(compressed_pos, reg_count);
 	write_variable_to_dst(compressed_pos, unpredictable_count);
 	write_array_to_dst(compressed_pos, unpredictable_data, unpredictable_count);

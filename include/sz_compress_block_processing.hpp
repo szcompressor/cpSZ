@@ -290,6 +290,26 @@ block_pred_and_quant_lorenzo_3d_with_eb(const meanInfo<T>& mean_info, const T * 
 					else{
 						float pred = lorenzo_predict_3d(cur_buffer_pos, buffer_dim0_offset, buffer_dim1_offset);
 						*(type_pos++) = quantize(pred, *cur_data_pos, precision, capacity, intv_radius, unpredictable_data_pos, cur_buffer_pos);
+						if(type_pos[-1] != 0){
+							T decompressed_data = *cur_buffer_pos;
+							ptrdiff_t offset = cur_data_pos - reinterpret_cast<const T *>(db_f);
+							if(decompressed_data >= ub_f[offset]){
+								// re-quantize to [lb, ub]
+								type_pos[-1] --;
+	                            *cur_buffer_pos = pred + 2 * (type_pos[-1] - intv_radius) * precision;
+							}
+							else if(decompressed_data <= lb_f[offset]){
+								// re-quantize to [lb, ub]
+								type_pos[-1] ++;
+	                            *cur_buffer_pos = pred + 2 * (type_pos[-1] - intv_radius) * precision;
+							}
+	                        if(*cur_buffer_pos >= ub_f[offset] || (*cur_buffer_pos <= lb_f[offset])){
+	                            type_pos[-1] = 0;
+	                            *cur_buffer_pos = *cur_data_pos;
+	                            *(unpredictable_data_pos++) = *cur_data_pos;
+	                        }
+							pred_err += fabs(pred - *cur_buffer_pos);
+						}
 					}
 				}
 				cur_data_pos ++;

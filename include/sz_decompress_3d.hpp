@@ -18,4 +18,8 @@ template<typename T>
 T *
 sz_decompress_3d(const unsigned char * compressed, size_t r1, size_t r2, size_t r3);
 
+template<typename T>
+T *
+sz_decompress_3d_with_eb(const unsigned char * compressed, const double * precisions, size_t r1, size_t r2, size_t r3);
+
 #endif
