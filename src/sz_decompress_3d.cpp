@@ -382,3 +382,44 @@ template
 double * 
 sz_decompress_3d_with_eb<double>(const unsigned char * compressed, const double * precisions, size_t r1, size_t r2, size_t r3);
 
+template<typename T>
+T *
+sz_decompress_1d_with_eb(const unsigned char * compressed, const double * precisions, size_t r1){
+	const unsigned char * compressed_pos = compressed;
+	int block_size = 0;
+	read_variable_from_src<int>(compressed_pos, block_size);
+	DSize_1d size(r1, block_size);
+	int intv_radius = 0;
+	read_variable_from_src(compressed_pos, intv_radius);
+	size_t unpredictable_count = 0;
+	read_variable_from_src(compressed_pos, unpredictable_count);
+	const T * unpredictable_data_pos = (const T *) compressed_pos;
+	compressed_pos += unpredictable_count * sizeof(float);
+	int * type = Huffman_decode_tree_and_data(4*intv_radius, size.num_elements, compressed_pos);
+	T * dec_data = (T *) malloc(size.num_elements*sizeof(T));
+	T * pred_buffer = (T *) malloc((size.block_size + 1)*sizeof(T));
+	int * type_pos = type;
+	const double * precision_pos = precisions;
+	T * cur_data_pos = dec_data;
+	for(int i=0; i<size.num_blocks; i++){
+		T * cur_buffer_pos = pred_buffer + 1; 
+		for(int j=0; j<size.block_size; j++){
+			T pred = cur_buffer_pos[-1];
+			T decompressed = recover(pred, *precision_pos, *(type_pos++), intv_radius, unpredictable_data_pos);
+			*(cur_data_pos++) = decompressed;
+			*(cur_buffer_pos++) = decompressed;
+			precision_pos ++; 
+		}
+	}
+	free(pred_buffer);
+	free(type);
+	return dec_data;
+}
+
+template
+float *
+sz_decompress_1d_with_eb<float>(const unsigned char * compressed, const double * precisions, size_t r1);
+
+template
+double *
+sz_decompress_1d_with_eb<double>(const unsigned char * compressed, const double * precisions, size_t r1);

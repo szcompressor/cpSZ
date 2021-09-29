@@ -85,6 +85,23 @@ exp_offset<double>(){
 	return 1023;
 }
 
+struct DSize_1d{
+	size_t d1;
+	size_t num_elements;
+	int block_size;
+	int max_num_block_elements;
+	size_t num_x;
+	size_t num_blocks;
+	DSize_1d(size_t r1, int bs){
+		d1 = r1;
+		num_elements = r1;
+		block_size = bs;
+		max_num_block_elements = bs;
+		num_x = (r1 - 1) / block_size + 1;
+		num_blocks = num_x;
+	}
+};
+
 struct DSize_2d{
 	size_t d1;
 	size_t d2;

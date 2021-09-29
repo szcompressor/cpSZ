@@ -593,3 +593,75 @@ template
 unsigned char * 
 sz_compress_3d_with_eb<double>(const double * data, const double * precision, size_t r1, size_t r2, size_t r3, size_t& compressed_size, int BSIZE, bool block_independant);
 
+template<typename T>
+unsigned char *
+sz_compress_1d_with_eb(const T * data, const double * precisions, size_t r1, size_t& compressed_size, int BSIZE, bool block_independant){
+	// block_independant = false;
+	DSize_1d size(r1, BSIZE);
+	int capacity = 0; // num of quant intervals
+	capacity = 32768;
+	int intv_radius = (capacity >> 1);
+	// assign data buffer address
+	int * type = (int *) malloc(size.num_elements * sizeof(int));
+	T * unpredictable_data = (T *) malloc((size.num_elements) * sizeof(T));
+	T * pred_buffer = (T *) malloc((size.block_size + 1) * sizeof(T));
+	pred_buffer[0] = 0;
+	const T * cur_data_pos = data;
+	const double * precision_pos = precisions;
+	int * type_pos = type;
+	T * unpredictable_data_pos = unpredictable_data;
+	for(int i=0; i<size.num_blocks; i++){
+		T * cur_buffer_pos = pred_buffer + 1; 
+		for(int j=0; j<size.block_size; j++){
+			T pred = cur_buffer_pos[-1];
+			double precision = *precision_pos;
+			*(type_pos++) = quantize(pred, *cur_data_pos, precision, capacity, intv_radius, unpredictable_data_pos, cur_buffer_pos);
+			if(type_pos[-1] != 0){
+				T decompressed_data = *cur_buffer_pos;
+				ptrdiff_t offset = cur_data_pos - data;
+				if(decompressed_data >= ub_f[offset]){
+					// re-quantize to [lb, ub]
+					type_pos[-1] --;
+                    *cur_buffer_pos = pred + 2 * (type_pos[-1] - intv_radius) * precision;
+				}
+				else if(decompressed_data <= lb_f[offset]){
+					// re-quantize to [lb, ub]
+					type_pos[-1] ++;
+                    *cur_buffer_pos = pred + 2 * (type_pos[-1] - intv_radius) * precision;
+				}
+                if(*cur_buffer_pos >= ub_f[offset] || (*cur_buffer_pos <= lb_f[offset])){
+                    type_pos[-1] = 0;
+                    *cur_buffer_pos = *cur_data_pos;
+                    *(unpredictable_data_pos++) = *cur_data_pos;
+                }
+			}
+			cur_buffer_pos ++;
+			cur_data_pos ++;
+			precision_pos ++;			
+		}
+	}
+	free(pred_buffer);
+	size_t unpredictable_count = unpredictable_data_pos - unpredictable_data;
+	unsigned char * compressed = NULL;
+	// TODO: change to a better estimated size
+	size_t est_size = size.num_elements*sizeof(T)*1.2;
+	compressed = (unsigned char *) malloc(est_size);
+	unsigned char * compressed_pos = compressed;
+	write_variable_to_dst(compressed_pos, size.block_size);
+	write_variable_to_dst(compressed_pos, intv_radius);
+	write_variable_to_dst(compressed_pos, unpredictable_count);
+	write_array_to_dst(compressed_pos, unpredictable_data, unpredictable_count);
+	Huffman_encode_tree_and_data(2*capacity, type, size.num_elements, compressed_pos);
+	compressed_size = compressed_pos - compressed;
+	free(unpredictable_data);
+	free(type);
+	return compressed;
+}
+
+template
+unsigned char *
+sz_compress_1d_with_eb<float>(const float * data, const double * precisions, size_t r1, size_t& compressed_size, int BSIZE, bool block_independant);
+
+template
+unsigned char *
+sz_compress_1d_with_eb<double>(const double * data, const double * precisions, size_t r1, size_t& compressed_size, int BSIZE, bool block_independant);
