@@ -1,6 +1,8 @@
 #!/bin/bash
 src_dir=`pwd`
+
 # build cpSZ
+cd ${src_dir}
 mkdir build
 cd build
 cmake ..
@@ -12,7 +14,7 @@ cd ${src_dir}/external
 git clone https://github.com/lxAltria/ftk.git
 cd ftk
 git checkout eval-cpSZ
-git commit 11830bb5b4469ed1e7c94c3c3235a2ebfbd46145 
+git reset --hard 78c1e80aa71b52f852eacfdbcea44129e62f3641 
 mkdir build
 cd build
 cmake ..

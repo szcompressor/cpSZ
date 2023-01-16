@@ -7,8 +7,7 @@ set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_CXX_FLAGS "-g -O2")
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
-find_library (ZSTD_LIBS zstd HINTS "/Users/xl92k/github/SZ/install/lib")
-set (ZSTD_INCLUDES "/Users/xl92k/github/SZ/install/include")
+find_package(zstd REQUIRED)
 add_subdirectory (src)
 add_subdirectory (test)
 

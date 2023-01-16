@@ -11,5 +11,5 @@ decompressed data files are data/uf.dat.out and data/vf.dat.out
 
 # Evaluation
 mkdir result && cd result
-./../external/ftk/build/bin/ex_cp_2d 3600 2400 ../data/uf.dat ../data/vf.dat test
-The critical point information is stored in test_*.dat
+./../external/ftk/build/bin/ex_cp_2d_bilinear 3600 2400 ../data/uf.dat ../data/vf.dat test
+To test linear vector fields, change the corresponding lines 

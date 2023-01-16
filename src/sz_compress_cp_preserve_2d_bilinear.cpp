@@ -354,7 +354,7 @@ rotate to make (u3, v3) appear only once in A, B, C, D
 */
 static double 
 derive_cp_eb_bilinear_online(const double u0, const double u1, const double u2, const double u3, const double v0, const double v1, const double v2, const double v3, bool verbose=false){
-	return 1;
+	// return 1;
 	// f(u) = A0 xy + B0 x + C0 y + D0
 	// f(v) = A1 xy + B1 x + C1 y + D1
 	// solve 
@@ -841,18 +841,9 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 				}
 				if(in_mesh){
                     bool verbose = false;
-                    if((i == 210) && (j == 221)){
-                        verbose = true;
-                        printf("k = %d\n", k);
-                    }
                     auto derived_eb = derive_cp_eb_bilinear_online(cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], cur_U_pos[0],
                         cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], cur_V_pos[0], verbose);
 					required_eb = MINF(required_eb, derived_eb);
-                    if((i == 210) && (j == 221)){
-                        printf("U: %.7f, %.7f, %.7f, %.7f\n", cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], cur_U_pos[0]);
-                        printf("V: %.7f, %.7f, %.7f, %.7f\n", cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], cur_V_pos[0]);
-                        printf("required_eb = %.7f\n\n", required_eb);
-                    }
 				}
 			}
 			eb[index_eb++] = required_eb;
@@ -924,15 +915,15 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 										cur_V_pos[-1 - r2], cur_V_pos[-r2], decompressed_v, cur_V_pos[-1], J_);
 									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
 									if(unpred_flag){
-                                        printf("i = %d, j = %d, k = %d\n", i, j, k);
-                                        std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
-                                        verbose = true;
-                                        printf("~~~~~~~~~~\n");
+                                        // printf("i = %d, j = %d, k = %d\n", i, j, k);
+                                        // std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                        // verbose = true;
+                                        // printf("~~~~~~~~~~\n");
                                         derive_cp_eb_bilinear_online(cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], decompressed_u,
                                         cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], decompressed_v, verbose);
-                                        printf("U: %.7f, %.7f, %.7f, %.7f\n", cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], decompressed_u);
-                                        printf("V: %.7f, %.7f, %.7f, %.7f\n", cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], decompressed_v);
-                                        printf("x = %.7f, y = %.7f\n", decompressed_u/cur_U_pos[0] - 1, decompressed_v/cur_V_pos[0] - 1);
+                                        // printf("U: %.7f, %.7f, %.7f, %.7f\n", cur_U_pos[offsets[2*k]], cur_U_pos[offsets[2*k+1]], cur_U_pos[offsets[2*k+2]], decompressed_u);
+                                        // printf("V: %.7f, %.7f, %.7f, %.7f\n", cur_V_pos[offsets[2*k]], cur_V_pos[offsets[2*k+1]], cur_V_pos[offsets[2*k+2]], decompressed_v);
+                                        // printf("x = %.7f, y = %.7f\n", decompressed_u/cur_U_pos[0] - 1, decompressed_v/cur_V_pos[0] - 1);
                                     }
 								}
 							}
@@ -957,10 +948,10 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 									int nroots_ = bilinear_extract_critical_point(cur_U_pos[-1], decompressed_u, cur_U_pos[r2], cur_U_pos[r2 - 1],
 										cur_V_pos[-1], decompressed_v, cur_V_pos[r2], cur_V_pos[r2 - 1], J_);
 									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
-                                    if(unpred_flag){
-                                        printf("i = %d, j = %d, k = %d\n", i, j, k);
-                                        std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
-                                    }
+                                    // if(unpred_flag){
+                                    //     printf("i = %d, j = %d, k = %d\n", i, j, k);
+                                    //     std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                    // }
 								}
 							}
 							if(!unpred_flag){
@@ -984,10 +975,10 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 									int nroots_ = bilinear_extract_critical_point(decompressed_u, cur_U_pos[1], cur_U_pos[r2 + 1], cur_U_pos[r2],
 										decompressed_v, cur_V_pos[1], cur_V_pos[r2 + 1], cur_V_pos[r2], J_);
 									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
-                                    if(unpred_flag){
-                                        printf("i = %d, j = %d, k = %d\n", i, j, k);
-                                        std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
-                                    }
+                                    // if(unpred_flag){
+                                    //     printf("i = %d, j = %d, k = %d\n", i, j, k);
+                                    //     std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                    // }
 								}
 							}
 							if(!unpred_flag){
@@ -1011,10 +1002,10 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 									int nroots_ = bilinear_extract_critical_point(cur_U_pos[- r2], cur_U_pos[-r2 + 1], cur_U_pos[1], decompressed_u,
 										cur_V_pos[- r2], cur_V_pos[-r2 + 1], cur_V_pos[1], decompressed_v, J_);
 									if((nroots != nroots_) || (!bilinear_verify_critical_point(nroots, J, J_, verbose))) unpred_flag = true;
-                                    if(unpred_flag){
-                                        printf("i = %d, j = %d, k = %d\n", i, j, k);
-                                        std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
-                                    }
+                                    // if(unpred_flag){
+                                    //     printf("i = %d, j = %d, k = %d\n", i, j, k);
+                                    //     std::cout << "#roots: " << nroots << " " << nroots_ << ", unpred_flag = " << unpred_flag << std::endl;
+                                    // }
 								}
 							}
                             // record number of failed verification
@@ -1053,7 +1044,7 @@ sz_compress_cp_preserve_2d_bilinear_online_log(const T * U, const T * V, size_t 
 			cur_U_pos ++, cur_V_pos ++;
 		}
 	}
-    printf("#Failed verification = %d\n", failed_verification);
+    // printf("#Failed verification = %d\n", failed_verification);
 	// writefile("eb_2d.dat", eb, num_elements);
 	// free(eb);
 	free(log_U);
