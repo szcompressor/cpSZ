@@ -1,7 +1,7 @@
 # cpSZ
-Critical point preserving for vector field
+Critical point preserving for vector fields
 
-# installation
+# Installation
 sh build_script.sh <br>
 Dependancies: ZSTD
 
