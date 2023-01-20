@@ -21,6 +21,16 @@ inline int eb_exponential_quantize(double& eb, const int base, const double log_
 	return id;
 }
 
+inline int eb_exponential_quantize(int64_t& eb, const int base, const double log_of_base, const int64_t threshold=1){
+	if(eb <= threshold){
+		eb = 0;
+		return 0;
+	}
+	int id = log2(eb / threshold)/log_of_base;
+	eb = pow(base, id) * threshold;
+	return id;
+}
+
 inline int eb_linear_quantize(double& eb, double threshold=1e-5){
 	int id = eb / threshold;
 	eb = id * threshold;

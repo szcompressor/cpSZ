@@ -171,6 +171,98 @@ template
 void
 sz_decompress_cp_preserve_2d_online<double>(const unsigned char * compressed, size_t r1, size_t r2, double *& U, double *& V);
 
+template<typename T, typename T_fp>
+void convert_to_floatping_point(const T_fp * U_fp, const T_fp * V_fp, size_t num_elements, T * U, T * V, int64_t vector_field_scaling_factor){
+	for(int i=0; i<num_elements; i++){
+		U[i] = U_fp[i] * (T)1.0 / vector_field_scaling_factor;
+		V[i] = V_fp[i] * (T)1.0 / vector_field_scaling_factor;
+	}
+}
+
+template<typename T_data>
+void
+sz_decompress_cp_preserve_2d_online_fp(const unsigned char * compressed, size_t r1, size_t r2, T_data *& U, T_data *& V){
+	if(U) free(U);
+	if(V) free(V);
+	using T = int64_t;
+	size_t num_elements = r1 * r2;
+	const unsigned char * compressed_pos = compressed;
+	T vector_field_scaling_factor = 0;
+	read_variable_from_src(compressed_pos, vector_field_scaling_factor);
+	int base = 0;
+	read_variable_from_src(compressed_pos, base);
+	printf("base = %d\n", base);
+	T threshold = 0;
+	read_variable_from_src(compressed_pos, threshold);
+	int intv_radius = 0;
+	read_variable_from_src(compressed_pos, intv_radius);
+	const int capacity = (intv_radius << 1);
+	size_t unpred_data_count = 0;
+	read_variable_from_src(compressed_pos, unpred_data_count);
+	const T * unpred_data_pos = (T *) compressed_pos;
+	compressed_pos += unpred_data_count*sizeof(T);
+	int * eb_quant_index = Huffman_decode_tree_and_data(2*1024, 2*num_elements, compressed_pos);
+	int * data_quant_index = Huffman_decode_tree_and_data(2*capacity, 2*num_elements, compressed_pos);
+	printf("pos = %ld\n", compressed_pos - compressed);
+	T * U_fp = (T *) malloc(num_elements*sizeof(T));
+	T * V_fp = (T *) malloc(num_elements*sizeof(T));
+	T * U_pos = U_fp;
+	T * V_pos = V_fp;
+	int * eb_quant_index_pos = eb_quant_index;
+	int * data_quant_index_pos = data_quant_index;
+	// const double threshold=std::numeric_limits<float>::epsilon();
+	for(int i=0; i<r1; i++){
+		for(int j=0; j<r2; j++){
+			// get eb
+			if(*eb_quant_index_pos == 0){
+				*U_pos = *(unpred_data_pos ++);
+				*V_pos = *(unpred_data_pos ++);
+				eb_quant_index_pos += 2;
+			}
+			else{
+				for(int k=0; k<2; k++){
+					T * cur_data_pos = (k == 0) ? U_pos : V_pos;					
+					T eb = pow(base, *eb_quant_index_pos ++) * threshold;
+					// double eb = *(eb_quant_index_pos ++) * 1e-3;
+					T d0 = (i && j) ? cur_data_pos[-1 - r2] : 0;
+					T d1 = (i) ? cur_data_pos[-r2] : 0;
+					T d2 = (j) ? cur_data_pos[-1] : 0;
+					T pred = d1 + d2 - d0;
+					*cur_data_pos = pred + 2 * (data_quant_index_pos[k] - intv_radius) * eb;
+				}
+			}
+			U_pos ++;
+			V_pos ++;
+			data_quant_index_pos += 2;
+		}
+	}
+	int64_t max = std::numeric_limits<int64_t>::min();
+	int64_t min = std::numeric_limits<int64_t>::max();
+	printf("max = %lld, min = %lld\n", max, min);
+	for(int i=0; i<num_elements; i++){
+		max = std::max(max, U_fp[i]);
+		max = std::max(max, V_fp[i]);
+		min = std::min(min, U_fp[i]);
+		min = std::min(min, V_fp[i]);
+	}
+	printf("max = %lld, min = %lld\n", max, min);
+	free(eb_quant_index);
+	free(data_quant_index);
+	U = (T_data *) malloc(num_elements*sizeof(T_data));
+	V = (T_data *) malloc(num_elements*sizeof(T_data));
+	convert_to_floatping_point(U_fp, V_fp, num_elements, U, V, vector_field_scaling_factor);
+	free(U_fp);
+	free(V_fp);
+}
+
+template
+void
+sz_decompress_cp_preserve_2d_online_fp<float>(const unsigned char * compressed, size_t r1, size_t r2, float *& U, float *& V);
+
+template
+void
+sz_decompress_cp_preserve_2d_online_fp<double>(const unsigned char * compressed, size_t r1, size_t r2, double *& U, double *& V);
+
 template<typename T>
 void
 sz_decompress_cp_preserve_2d_online_log(const unsigned char * compressed, size_t r1, size_t r2, T *& U, T *& V){
