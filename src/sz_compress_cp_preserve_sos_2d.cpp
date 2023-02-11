@@ -357,7 +357,7 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 						data_quant_index_pos[k] = quant_index;
 						decompressed[k] = pred + 2 * (quant_index - intv_radius) * abs_eb; 
 						// check original data
-						if(std::abs(decompressed[k] - cur_data) >= abs_eb){
+						if(std::abs(decompressed[k] - cur_data) >= required_eb){
 							unpred_flag = true;
 							break;
 						}
