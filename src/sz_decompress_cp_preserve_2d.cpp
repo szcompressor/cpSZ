@@ -201,7 +201,7 @@ sz_decompress_cp_preserve_2d_online_fp(const unsigned char * compressed, size_t 
 	read_variable_from_src(compressed_pos, unpred_data_count);
 	const T * unpred_data_pos = (T *) compressed_pos;
 	compressed_pos += unpred_data_count*sizeof(T);
-	int * eb_quant_index = Huffman_decode_tree_and_data(2*1024, 2*num_elements, compressed_pos);
+	int * eb_quant_index = Huffman_decode_tree_and_data(2*1024, num_elements, compressed_pos);
 	int * data_quant_index = Huffman_decode_tree_and_data(2*capacity, 2*num_elements, compressed_pos);
 	printf("pos = %ld\n", compressed_pos - compressed);
 	T * U_fp = (T *) malloc(num_elements*sizeof(T));
@@ -217,12 +217,12 @@ sz_decompress_cp_preserve_2d_online_fp(const unsigned char * compressed, size_t 
 			if(*eb_quant_index_pos == 0){
 				*U_pos = *(unpred_data_pos ++);
 				*V_pos = *(unpred_data_pos ++);
-				eb_quant_index_pos += 2;
+				eb_quant_index_pos ++;
 			}
 			else{
+				T eb = pow(base, *eb_quant_index_pos ++) * threshold;
 				for(int k=0; k<2; k++){
 					T * cur_data_pos = (k == 0) ? U_pos : V_pos;					
-					T eb = pow(base, *eb_quant_index_pos ++) * threshold;
 					// double eb = *(eb_quant_index_pos ++) * 1e-3;
 					T d0 = (i && j) ? cur_data_pos[-1 - r2] : 0;
 					T d1 = (i) ? cur_data_pos[-r2] : 0;

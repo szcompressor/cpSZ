@@ -331,49 +331,44 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 						cur_V_pos[offsets[k]], cur_V_pos[offsets[k+1]], cur_V_pos[0]));
 				}
 			}
-			if(required_eb > 0){
+			T abs_eb = required_eb;
+			*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+			if(abs_eb > 0){
 				bool unpred_flag = false;
 				T decompressed[2];
 				// compress U and V
 				for(int k=0; k<2; k++){
 					T * cur_data_pos = (k == 0) ? cur_U_pos : cur_V_pos;
 					T cur_data = *cur_data_pos;
-					T abs_eb = required_eb;
-					eb_quant_index_pos[k] = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
-					// eb_quant_index_pos[k] = eb_linear_quantize(abs_eb, 1e-3);
-					if(eb_quant_index_pos[k] > 0){
-						// get adjacent data and perform Lorenzo
-						/*
-							d2 X
-							d0 d1
-						*/
-						T d0 = (i && j) ? cur_data_pos[-1 - r2] : 0;
-						T d1 = (i) ? cur_data_pos[-r2] : 0;
-						T d2 = (j) ? cur_data_pos[-1] : 0;
-						T pred = d1 + d2 - d0;
-						T diff = cur_data - pred;
-						T quant_diff = std::abs(diff) / abs_eb + 1;
-						if(quant_diff < capacity){
-							quant_diff = (diff > 0) ? quant_diff : -quant_diff;
-							int quant_index = (int)(quant_diff/2) + intv_radius;
-							data_quant_index_pos[k] = quant_index;
-							decompressed[k] = pred + 2 * (quant_index - intv_radius) * abs_eb; 
-							// check original data
-							if(std::abs(decompressed[k] - cur_data) >= abs_eb){
-								unpred_flag = true;
-								break;
-							}
-						}
-						else{
+					// get adjacent data and perform Lorenzo
+					/*
+						d2 X
+						d0 d1
+					*/
+					T d0 = (i && j) ? cur_data_pos[-1 - r2] : 0;
+					T d1 = (i) ? cur_data_pos[-r2] : 0;
+					T d2 = (j) ? cur_data_pos[-1] : 0;
+					T pred = d1 + d2 - d0;
+					T diff = cur_data - pred;
+					T quant_diff = std::abs(diff) / abs_eb + 1;
+					if(quant_diff < capacity){
+						quant_diff = (diff > 0) ? quant_diff : -quant_diff;
+						int quant_index = (int)(quant_diff/2) + intv_radius;
+						data_quant_index_pos[k] = quant_index;
+						decompressed[k] = pred + 2 * (quant_index - intv_radius) * abs_eb; 
+						// check original data
+						if(std::abs(decompressed[k] - cur_data) >= abs_eb){
 							unpred_flag = true;
 							break;
 						}
 					}
-					else unpred_flag = true;
+					else{
+						unpred_flag = true;
+						break;
+					}
 				}
 				if(unpred_flag){
 					// recover quant index
-					*(eb_quant_index_pos ++) = 0;
 					*(eb_quant_index_pos ++) = 0;
 					*(data_quant_index_pos ++) = intv_radius;
 					*(data_quant_index_pos ++) = intv_radius;
@@ -381,7 +376,7 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 					unpred_data.push_back(*cur_V_pos);
 				}
 				else{
-					eb_quant_index_pos += 2;
+					eb_quant_index_pos ++;
 					data_quant_index_pos += 2;
 					// assign decompressed data
 					*cur_U_pos = decompressed[0];
@@ -390,7 +385,6 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 			}
 			else{
 				// record as unpredictable data
-				*(eb_quant_index_pos ++) = 0;
 				*(eb_quant_index_pos ++) = 0;
 				*(data_quant_index_pos ++) = intv_radius;
 				*(data_quant_index_pos ++) = intv_radius;
@@ -414,7 +408,7 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 	size_t unpredictable_count = unpred_data.size();
 	write_variable_to_dst(compressed_pos, unpredictable_count);
 	write_array_to_dst(compressed_pos, (T *)&unpred_data[0], unpredictable_count);	
-	Huffman_encode_tree_and_data(2*1024, eb_quant_index, 2*num_elements, compressed_pos);
+	Huffman_encode_tree_and_data(2*1024, eb_quant_index, num_elements, compressed_pos);
 	free(eb_quant_index);
 	Huffman_encode_tree_and_data(2*capacity, data_quant_index, 2*num_elements, compressed_pos);
 	printf("pos = %ld\n", compressed_pos - compressed);
