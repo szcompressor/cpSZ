@@ -8,7 +8,7 @@ target_link_libraries (sz_test_with_eb cpsz)
 
 add_executable (sz_compress_cp_preserve_2d_test sz_compress_cp_preserve_2d_test.cpp)
 target_include_directories (sz_compress_cp_preserve_2d_test PRIVATE ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries (sz_compress_cp_preserve_2d_test cpsz)
+target_link_libraries (sz_compress_cp_preserve_2d_test cpsz FTK::libftk)
 
 add_executable (sz_compress_cp_preserve_3d_test sz_compress_cp_preserve_3d_test.cpp)
 target_include_directories (sz_compress_cp_preserve_3d_test PRIVATE ${PROJECT_SOURCE_DIR}/include)
