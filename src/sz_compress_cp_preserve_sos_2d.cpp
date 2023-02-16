@@ -781,8 +781,6 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec(const T_data * U, const T_dat
 	const int intv_radius = (capacity >> 1);
 	T max_eb = range * max_pwr_eb;
 	unpred_vec<T> unpred_data;
-	T * U_pos = U_fp;
-	T * V_pos = V_fp;
 	// offsets to get six adjacent triangle indices
 	// the 7-th rolls back to T0
 	/*
@@ -816,7 +814,35 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec(const T_data * U, const T_dat
 			index_offset[i][j][1] = y[i][j] - y[i][2];
 		}
 	}
-	// TODO: check cp for all cells
+	// offset relative to 2*(i*r2 + j)
+	// note: width for cells is 2*(r2-1)
+	int cell_offset[6] = {
+		-2*((int)r2-1)-1, -2*((int)r2-1)-2, -1, 0, 1, -2*((int)r2-1)
+	};
+	// check cp for all cells
+	vector<bool> cp_exist(2*(r1-1)*(r2-1), 0);
+	for(int i=0; i<r1-1; i++){
+		for(int j=0; j<r2-1; j++){
+			int indices[3];
+			indices[0] = i*r2 + j;
+			indices[1] = (i+1)*r2 + j;
+			indices[2] = (i+1)*r2 + (j+1); 
+			T vf[3][2];
+			// cell index 0
+			for(int p=0; p<3; p++){
+				vf[p][0] = U_fp[indices[p]];
+				vf[p][1] = V_fp[indices[p]];
+			}
+			cp_exist[2*(i * (r2-1) + j)] = (check_cp(vf, indices) == 1);
+			// cell index 1
+			indices[1] = i*r2 + (j+1);
+			vf[1][0] = U_fp[indices[1]];
+			vf[1][1] = V_fp[indices[1]];
+			cp_exist[2*(i * (r2-1) + j) + 1] = (check_cp(vf, indices) == 1);
+		}
+	}
+	T * U_pos = U_fp;
+	T * V_pos = V_fp;
 	T threshold = 1;
 	// conditions_2d cond;
 	for(int i=0; i<r1; i++){
@@ -825,11 +851,36 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec(const T_data * U, const T_dat
 		T * cur_V_pos = V_pos;
 		for(int j=0; j<r2; j++){
 			T abs_eb = max_eb;
-			// compress data and then verify
 			bool unpred_flag = false;
-			bool verification_flag = true;
+			bool verification_flag = false;
+			// check if cp exists in adjacent cells
+			for(int k=0; k<6; k++){
+				bool in_mesh = true;
+				for(int p=0; p<2; p++){
+					// reserved order!
+					if(!(in_range(i + index_offset[k][p][1], (int)r1) && in_range(j + index_offset[k][p][0], (int)r2))){
+						in_mesh = false;
+						break;
+					}
+				}
+				if(in_mesh){
+					// if(2*(i*((int)r2-1) + j) + cell_offset[k] > 2*(r1-1)*(r2-1)){
+					// 	std::cout << "k = " << k << ": i = " << i << ", j = " << j << ", cell center = " << 2*(i*((int)r2-1) + j) << std::endl;
+					// 	std::cout << "cell_offset = " << cell_offset[k] << std::endl;
+					// 	std::cout << "cell num = " << 2*(i*(r2-1) + j) + cell_offset[k] << std::endl;
+					// 	exit(0);
+					// }
+					bool original_has_cp = cp_exist[2*(i*(r2-1) + j) + cell_offset[k]];
+					if(original_has_cp){
+						unpred_flag = true;
+						verification_flag = true;
+						break;
+					}
+				}
+			}
 			T decompressed[2];
-			do{
+			// compress data and then verify
+			while(!verification_flag){
 				*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
 				unpred_flag = false;
 				// compress U and V
@@ -876,24 +927,15 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec(const T_data * U, const T_dat
 							indices[p] = (i + index_offset[k][p][1])*r2 + (j + index_offset[k][p][0]);
 						}
 						indices[2] = i*r2 + j;
+						// TODO: change stragegy and consider types
 						T vf[3][2];
 						for(int p=0; p<3; p++){
 							vf[p][0] = U_fp[indices[p]];
 							vf[p][1] = V_fp[indices[p]];
 						}
-						int original_has_cp = check_cp(vf, indices);
-						// TODO: optimization by pre-computation
-						// TODO: change stragegy and consider types
-						if(original_has_cp == 1){
-							unpred_flag = true;
-							verification_flag = true;
-							break;
-						}
 						vf[2][0] = decompressed[0], vf[2][1] = decompressed[1];
-						int decompressed_has_cp = check_cp(vf, indices);
-						if(original_has_cp != decompressed_has_cp){
-							// TODO: change to error bound relaxation
-							unpred_flag = true;
+						bool decompressed_has_cp = (check_cp(vf, indices) == 1);
+						if(decompressed_has_cp){
 							verification_flag = false;
 							break;
 						}
@@ -905,7 +947,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec(const T_data * U, const T_dat
 					unpred_flag = true;
 					verification_flag = true;					
 				}
-			}while(!verification_flag);
+			}
 			if(unpred_flag){
 				// recover quant index
 				*(eb_quant_index_pos ++) = 0;
@@ -921,7 +963,6 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec(const T_data * U, const T_dat
 				*cur_U_pos = decompressed[0];
 				*cur_V_pos = decompressed[1];
 			}
-
 			cur_U_pos ++, cur_V_pos ++;
 		}
 		U_pos += r2;
