@@ -172,7 +172,7 @@ void
 sz_decompress_cp_preserve_2d_online<double>(const unsigned char * compressed, size_t r1, size_t r2, double *& U, double *& V);
 
 template<typename T, typename T_fp>
-void convert_to_floatping_point(const T_fp * U_fp, const T_fp * V_fp, size_t num_elements, T * U, T * V, int64_t vector_field_scaling_factor){
+void convert_to_floating_point(const T_fp * U_fp, const T_fp * V_fp, size_t num_elements, T * U, T * V, int64_t vector_field_scaling_factor){
 	for(int i=0; i<num_elements; i++){
 		U[i] = U_fp[i] * (T)1.0 / vector_field_scaling_factor;
 		V[i] = V_fp[i] * (T)1.0 / vector_field_scaling_factor;
@@ -250,7 +250,7 @@ sz_decompress_cp_preserve_2d_online_fp(const unsigned char * compressed, size_t 
 	free(data_quant_index);
 	U = (T_data *) malloc(num_elements*sizeof(T_data));
 	V = (T_data *) malloc(num_elements*sizeof(T_data));
-	convert_to_floatping_point(U_fp, V_fp, num_elements, U, V, vector_field_scaling_factor);
+	convert_to_floating_point(U_fp, V_fp, num_elements, U, V, vector_field_scaling_factor);
 	free(U_fp);
 	free(V_fp);
 }

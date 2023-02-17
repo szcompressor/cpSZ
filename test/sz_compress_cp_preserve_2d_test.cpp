@@ -11,6 +11,8 @@ int main(int argc, char ** argv){
     int r1 = atoi(argv[3]);
     int r2 = atoi(argv[4]);
     double max_eb = atof(argv[5]);
+    int option = 0;
+    if(argc > 6) option = atoi(argv[6]);
 
     size_t result_size = 0;
     struct timespec start, end;
@@ -23,9 +25,16 @@ int main(int argc, char ** argv){
     // unsigned char * result = sz_compress_cp_preserve_2d_bilinear_online_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_sos_2d_online(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_sos_2d_online_fp(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(U, V, r1, r2, result_size, false, max_eb);
-    unsigned char * result = sz_compress_cp_preserve_sos_2d_online_fp_spec_exec(U, V, r1, r2, result_size, false, max_eb);
+    unsigned char * result = NULL;
+    if(option == 0) result = sz_compress_cp_preserve_sos_2d_online_fp(U, V, r1, r2, result_size, false, max_eb);
+    else if(option == 1) result = sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(U, V, r1, r2, result_size, false, max_eb);
+    else if(option == 2) result = sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(U, V, r1, r2, result_size, false, max_eb);
+    else if(option == 3) result = sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(U, V, r1, r2, result_size, false, max_eb, 8);
+    else if(option == 4) result = sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(U, V, r1, r2, result_size, false, max_eb, 8);
+    else{
+        std::cerr << "Option not supported\n";
+        exit(0);
+    }
     unsigned char * result_after_lossless = NULL;
     size_t lossless_outsize = sz_lossless_compress(ZSTD_COMPRESSOR, 3, result, result_size, &result_after_lossless);
     err = clock_gettime(CLOCK_REALTIME, &end);
