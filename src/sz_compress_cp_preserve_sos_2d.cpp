@@ -20,33 +20,143 @@ derive_cp_abs_eb_sos_online(const T u0, const T u1, const T u2, const T v0, cons
 	T M2 = u0*v1 - u1*v0;
 	T M = M0 + M1 + M2;
 	if(M == 0) return 0;
-	bool f1 = (M0 == 0) || (M / M0 >= 1);
-	bool f2 = (M1 == 0) || (M / M1 >= 1); 
-	bool f3 = (M2 == 0) || (M / M2 >= 1);
-	if(f1 && f2 && f3){
-		return 0;
+	// keep sign for the original simplex
+	// preserve sign of (M + Ae1 + Be2)
+	T eb = std::abs(M) / (std::abs(u1 - u0) + std::abs(v0 - v1));
+	{
+		// keep sign for replacing the first and second vertices
+		T cur_eb = MINF(std::abs(u1*v2 - u2*v1) / (std::abs(u1) + std::abs(v1)), std::abs(u0*v2 - u2*v0) / (std::abs(u0) + std::abs(v0)));
+		eb = MINF(eb, cur_eb);
 	}
-	else{
-		if(same_direction_2d(u0, u1, u2) || same_direction_2d(v0, v1, v2)){			
-			// return -1; // relative error 1
-			return MINF(std::abs(u2), std::abs(v2));
-		}
-		// test
-		// keep sign for the original simplex
-		// preserve sign of (M + Ae1 + Be2)
-		T eb = std::abs(M) / (std::abs(u1 - u0) + std::abs(v0 - v1));
-		{
-			// keep sign for replacing the first and second vertices
-			T cur_eb = MINF(std::abs(u1*v2 - u2*v1) / (std::abs(u1) + std::abs(v1)), std::abs(u0*v2 - u2*v0) / (std::abs(u0) + std::abs(v0)));
-			eb = MINF(eb, cur_eb);
-		}
-		// eb = std::abs(M) * 1.0 / (std::abs(u1*v2 - u0*v2) + std::abs(u2*v0 - u2*v1));
-		// {
-		// 	double cur_eb = MINF(std::abs(u1*v2 - u2*v1) * 1.0 / (std::abs(u1*v2) + std::abs(u2*v1)), std::abs(u0*v2 - u2*v0) * 1.0 / (std::abs(u0*v2) + std::abs(u2*v0)));
-		// 	eb = MINF(eb, cur_eb);			
-		// }
-		return eb;
+	if(same_direction_2d(u0, u1, u2)){			
+		eb = MAX(eb, std::abs(u2));
 	}
+	if(same_direction_2d(v0, v1, v2)){			
+		eb = MAX(eb, std::abs(v2));
+	}
+	return eb;
+}
+
+template<typename T_fp>
+int check_cp(T_fp vf[3][2], int indices[3]){
+	// robust critical point test
+	bool succ = ftk::robust_critical_point_in_simplex2(vf, indices);
+	if (!succ) return -1;
+	return 1;
+}
+
+template<typename T_fp>
+vector<bool> compute_cp(const T_fp * U_fp, const T_fp * V_fp, int r1, int r2){
+	// check cp for all cells
+	vector<bool> cp_exist(2*(r1-1)*(r2-1), 0);
+	for(int i=0; i<r1-1; i++){
+		for(int j=0; j<r2-1; j++){
+			int indices[3];
+			indices[0] = i*r2 + j;
+			indices[1] = (i+1)*r2 + j;
+			indices[2] = (i+1)*r2 + (j+1); 
+			T_fp vf[3][2];
+			// cell index 0
+			for(int p=0; p<3; p++){
+				vf[p][0] = U_fp[indices[p]];
+				vf[p][1] = V_fp[indices[p]];
+			}
+			cp_exist[2*(i * (r2-1) + j)] = (check_cp(vf, indices) == 1);
+			// cell index 1
+			indices[1] = i*r2 + (j+1);
+			vf[1][0] = U_fp[indices[1]];
+			vf[1][1] = V_fp[indices[1]];
+			cp_exist[2*(i * (r2-1) + j) + 1] = (check_cp(vf, indices) == 1);
+		}
+	}
+	return cp_exist;	
+}
+
+#define SINGULAR 0
+#define ATTRACTING 1 // 2 real negative eigenvalues
+#define REPELLING 2 // 2 real positive eigenvalues
+#define SADDLE 3// 1 real negative and 1 real positive
+#define ATTRACTING_FOCUS 4 // complex with negative real
+#define REPELLING_FOCUS 5 // complex with positive real
+#define CENTER 6 // complex with 0 real
+
+template<typename T_fp, typename T>
+int check_cp_type(T_fp vf[3][2], T v[3][2], double X[3][2], int indices[3]){
+	// robust critical point test
+	bool succ = ftk::robust_critical_point_in_simplex2(vf, indices);
+	if (!succ) return -1;
+
+	double J[2][2]; // jacobian
+	double v_d[3][2];
+	for(int i=0; i<3; i++){
+		for(int j=0; j<2; j++){
+			v_d[i][j] = v[i][j];
+		}
+	}
+	ftk::jacobian_2dsimplex2(X, v_d, J);  
+	int cp_type = 0;
+	std::complex<double> eig[2];
+	double delta = ftk::solve_eigenvalues2x2(J, eig);
+	// if(fabs(delta) < std::numeric_limits<double>::epsilon())
+	if (delta >= 0) { // two real roots
+	if (eig[0].real() * eig[1].real() < 0) {
+		cp_type = SADDLE;
+	} else if (eig[0].real() < 0) {
+		cp_type = ATTRACTING;
+	}
+	else if (eig[0].real() > 0){
+		cp_type = REPELLING;
+	}
+		else cp_type = SINGULAR;
+	} else { // two conjugate roots
+		if (eig[0].real() < 0) {
+			cp_type = ATTRACTING_FOCUS;
+		} else if (eig[0].real() > 0) {
+			cp_type = REPELLING_FOCUS;
+		} else 
+		cp_type = CENTER;
+	}
+	return cp_type;
+}
+
+template<typename T_data, typename T_fp>
+vector<int> compute_cp_and_type(const T_fp * U_fp, const T_fp * V_fp, const T_data * U, const T_data * V, int r1, int r2){
+	// order: x then y
+	double X1[3][2] = {
+		{0, 0},
+		{0, 1},
+		{1, 1}
+	};
+	double X2[3][2] = {
+		{0, 0},
+		{1, 0},
+		{1, 1}
+	};
+	vector<int> cp_type(2*(r1-1)*(r2-1), -1);
+	for(int i=0; i<r1-1; i++){
+		for(int j=0; j<r2-1; j++){
+			int indices[3];
+			indices[0] = i*r2 + j;
+			indices[1] = (i+1)*r2 + j;
+			indices[2] = (i+1)*r2 + (j+1); 
+			T_fp vf[3][2];
+			T_data v[3][2];
+			// cell index 0
+			for(int p=0; p<3; p++){
+				vf[p][0] = U_fp[indices[p]];
+				vf[p][1] = V_fp[indices[p]];
+				v[p][0] = U[indices[p]];
+				v[p][1] = V[indices[p]];
+			}
+			cp_type[2*(i * (r2-1) + j)] = check_cp_type(vf, v, X1, indices);
+			// cell index 1
+			indices[1] = i*r2 + (j+1);
+			vf[1][0] = U_fp[indices[1]], vf[1][1] = V_fp[indices[1]];
+			v[1][0] = U[indices[1]], v[1][1] = V[indices[1]];			
+			cp_type[2*(i * (r2-1) + j) + 1] = check_cp_type(vf, v, X2, indices);
+		}
+	}
+	return cp_type;
 }
 
 // template<typename T>
@@ -277,8 +387,6 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 	const int intv_radius = (capacity >> 1);
 	T max_eb = range * max_pwr_eb;
 	unpred_vec<T> unpred_data;
-	T * U_pos = U_fp;
-	T * V_pos = V_fp;
 	// offsets to get six adjacent triangle indices
 	// the 7-th rolls back to T0
 	/*
@@ -312,8 +420,15 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 			index_offset[i][j][1] = y[i][j] - y[i][2];
 		}
 	}
+	int cell_offset[6] = {
+		-2*((int)r2-1)-1, -2*((int)r2-1)-2, -1, 0, 1, -2*((int)r2-1)
+	};
+	T * U_pos = U_fp;
+	T * V_pos = V_fp;
 	T threshold = 1;
 	// conditions_2d cond;
+	// check cp for all cells
+	vector<bool> cp_exist = compute_cp(U_fp, V_fp, r1, r2);
 	for(int i=0; i<r1; i++){
 		// printf("start %d row\n", i);
 		T * cur_U_pos = U_pos;
@@ -331,7 +446,9 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 					}
 				}
 				if(in_mesh){
-					required_eb = MINF(required_eb, (T) derive_cp_abs_eb_sos_online(cur_U_pos[offsets[k]], cur_U_pos[offsets[k+1]], cur_U_pos[0],
+					bool original_has_cp = cp_exist[2*(i*(r2-1) + j) + cell_offset[k]];
+					if(original_has_cp) required_eb = 0;
+					else required_eb = MINF(required_eb, (T) derive_cp_abs_eb_sos_online(cur_U_pos[offsets[k]], cur_U_pos[offsets[k+1]], cur_U_pos[0],
 						cur_V_pos[offsets[k]], cur_V_pos[offsets[k+1]], cur_V_pos[0]));
 				}
 			}
@@ -463,8 +580,6 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 	const int intv_radius = (capacity >> 1);
 	T max_eb = range * max_pwr_eb;
 	unpred_vec<T> unpred_data;
-	T * U_pos = U_fp;
-	T * V_pos = V_fp;
 	// offsets to get six adjacent triangle indices
 	// the 7-th rolls back to T0
 	/*
@@ -498,13 +613,20 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 			index_offset[i][j][1] = y[i][j] - y[i][2];
 		}
 	}
-	T threshold = 1;
-	// conditions_2d cond;
 	// intermediate variable
 	T decompressed[2];
 	T data_ori[2];
 	T pred[2];
 	T pred_residue[2];
+	int cell_offset[6] = {
+		-2*((int)r2-1)-1, -2*((int)r2-1)-2, -1, 0, 1, -2*((int)r2-1)
+	};
+	T * U_pos = U_fp;
+	T * V_pos = V_fp;
+	T threshold = 1;
+	// conditions_2d cond;
+	// check cp for all cells
+	vector<bool> cp_exist = compute_cp(U_fp, V_fp, r1, r2);
 	for(int i=0; i<r1; i++){
 		// printf("start %d row\n", i);
 		T * cur_U_pos = U_pos;
@@ -522,7 +644,9 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 					}
 				}
 				if(in_mesh){
-					required_eb = MINF(required_eb, (T) derive_cp_abs_eb_sos_online(cur_U_pos[offsets[k]], cur_U_pos[offsets[k+1]], cur_U_pos[0],
+					bool original_has_cp = cp_exist[2*(i*(r2-1) + j) + cell_offset[k]];
+					if(original_has_cp) required_eb = 0;
+					else required_eb = MINF(required_eb, (T) derive_cp_abs_eb_sos_online(cur_U_pos[offsets[k]], cur_U_pos[offsets[k+1]], cur_U_pos[0],
 						cur_V_pos[offsets[k]], cur_V_pos[offsets[k+1]], cur_V_pos[0]));
 				}
 			}
@@ -667,54 +791,6 @@ template
 unsigned char *
 sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const double * U, const double * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb);
 
-/*
-speculative compression: iteratively refine bound for FN
-*/
-template<typename T>
-T 
-evaluate_cp_abs_eb_sos_online(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2){
-	T M0 = u2*v0 - u0*v2;
-	T M1 = u1*v2 - u2*v1;
-	T M2 = u0*v1 - u1*v0;
-	T M = M0 + M1 + M2;
-	if(M == 0) return 0;
-	bool f1 = (M0 == 0) || (M / M0 >= 1);
-	bool f2 = (M1 == 0) || (M / M1 >= 1); 
-	bool f3 = (M2 == 0) || (M / M2 >= 1);
-	if(f1 && f2 && f3){
-		return 0;
-	}
-	else{
-		if(same_direction_2d(u0, u1, u2) || same_direction_2d(v0, v1, v2)){			
-			// return -1; // relative error 1
-			return MINF(std::abs(u2), std::abs(v2));
-		}
-		// test
-		// keep sign for the original simplex
-		// preserve sign of (M + Ae1 + Be2)
-		T eb = std::abs(M) / (std::abs(u1 - u0) + std::abs(v0 - v1));
-		{
-			// keep sign for replacing the first and second vertices
-			T cur_eb = MINF(std::abs(u1*v2 - u2*v1) / (std::abs(u1) + std::abs(v1)), std::abs(u0*v2 - u2*v0) / (std::abs(u0) + std::abs(v0)));
-			eb = MINF(eb, cur_eb);
-		}
-		// eb = std::abs(M) * 1.0 / (std::abs(u1*v2 - u0*v2) + std::abs(u2*v0 - u2*v1));
-		// {
-		// 	double cur_eb = MINF(std::abs(u1*v2 - u2*v1) * 1.0 / (std::abs(u1*v2) + std::abs(u2*v1)), std::abs(u0*v2 - u2*v0) * 1.0 / (std::abs(u0*v2) + std::abs(u2*v0)));
-		// 	eb = MINF(eb, cur_eb);			
-		// }
-		return eb;
-	}
-}
-
-template<typename T_fp>
-int check_cp(T_fp vf[3][2], int indices[3]){
-	// robust critical point test
-	bool succ = ftk::robust_critical_point_in_simplex2(vf, indices);
-	if (!succ) return -1;
-	return 1;
-}
-
 // variation with speculative compression on cp detection
 template<typename T_data>
 unsigned char *
@@ -777,27 +853,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(const T_data * U, const T_
 		-2*((int)r2-1)-1, -2*((int)r2-1)-2, -1, 0, 1, -2*((int)r2-1)
 	};
 	// check cp for all cells
-	vector<bool> cp_exist(2*(r1-1)*(r2-1), 0);
-	for(int i=0; i<r1-1; i++){
-		for(int j=0; j<r2-1; j++){
-			int indices[3];
-			indices[0] = i*r2 + j;
-			indices[1] = (i+1)*r2 + j;
-			indices[2] = (i+1)*r2 + (j+1); 
-			T vf[3][2];
-			// cell index 0
-			for(int p=0; p<3; p++){
-				vf[p][0] = U_fp[indices[p]];
-				vf[p][1] = V_fp[indices[p]];
-			}
-			cp_exist[2*(i * (r2-1) + j)] = (check_cp(vf, indices) == 1);
-			// cell index 1
-			indices[1] = i*r2 + (j+1);
-			vf[1][0] = U_fp[indices[1]];
-			vf[1][1] = V_fp[indices[1]];
-			cp_exist[2*(i * (r2-1) + j) + 1] = (check_cp(vf, indices) == 1);
-		}
-	}
+	vector<bool> cp_exist = compute_cp(U_fp, V_fp, r1, r2);
 	T * U_pos = U_fp;
 	T * V_pos = V_fp;
 	T threshold = 1;
@@ -949,53 +1005,6 @@ template
 unsigned char *
 sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(const double * U, const double * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb, double max_factor);
 
-#define SINGULAR 0
-#define ATTRACTING 1 // 2 real negative eigenvalues
-#define REPELLING 2 // 2 real positive eigenvalues
-#define SADDLE 3// 1 real negative and 1 real positive
-#define ATTRACTING_FOCUS 4 // complex with negative real
-#define REPELLING_FOCUS 5 // complex with positive real
-#define CENTER 6 // complex with 0 real
-
-template<typename T_fp, typename T>
-int check_cp_type(T_fp vf[3][2], T v[3][2], double X[3][2], int indices[3]){
-	// robust critical point test
-	bool succ = ftk::robust_critical_point_in_simplex2(vf, indices);
-	if (!succ) return -1;
-
-	double J[2][2]; // jacobian
-	double v_d[3][2];
-	for(int i=0; i<3; i++){
-		for(int j=0; j<2; j++){
-			v_d[i][j] = v[i][j];
-		}
-	}
-	ftk::jacobian_2dsimplex2(X, v_d, J);  
-	int cp_type = 0;
-	std::complex<double> eig[2];
-	double delta = ftk::solve_eigenvalues2x2(J, eig);
-	// if(fabs(delta) < std::numeric_limits<double>::epsilon())
-	if (delta >= 0) { // two real roots
-	if (eig[0].real() * eig[1].real() < 0) {
-		cp_type = SADDLE;
-	} else if (eig[0].real() < 0) {
-		cp_type = ATTRACTING;
-	}
-	else if (eig[0].real() > 0){
-		cp_type = REPELLING;
-	}
-		else cp_type = SINGULAR;
-	} else { // two conjugate roots
-		if (eig[0].real() < 0) {
-			cp_type = ATTRACTING_FOCUS;
-		} else if (eig[0].real() > 0) {
-			cp_type = REPELLING_FOCUS;
-		} else 
-		cp_type = CENTER;
-	}
-	return cp_type;
-}
-
 template<typename T_data, typename T_fp>
 static inline T_data convert_fp_to_float(T_fp fp, T_fp vector_field_scaling_factor){
 	return fp * (T_data) 1.0 / vector_field_scaling_factor;
@@ -1063,46 +1072,12 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 	int cell_offset[6] = {
 		-2*((int)r2-1)-1, -2*((int)r2-1)-2, -1, 0, 1, -2*((int)r2-1)
 	};
-	// order: x then y
-	double X1[3][2] = {
-		{0, 0},
-		{0, 1},
-		{1, 1}
-	};
-	double X2[3][2] = {
-		{0, 0},
-		{1, 0},
-		{1, 1}
-	};
-	// check cp for all cells
-	vector<int> cp_type(2*(r1-1)*(r2-1), -1);
-	for(int i=0; i<r1-1; i++){
-		for(int j=0; j<r2-1; j++){
-			int indices[3];
-			indices[0] = i*r2 + j;
-			indices[1] = (i+1)*r2 + j;
-			indices[2] = (i+1)*r2 + (j+1); 
-			T vf[3][2];
-			T_data v[3][2];
-			// cell index 0
-			for(int p=0; p<3; p++){
-				vf[p][0] = U_fp[indices[p]];
-				vf[p][1] = V_fp[indices[p]];
-				v[p][0] = U[indices[p]];
-				v[p][1] = V[indices[p]];
-			}
-			cp_type[2*(i * (r2-1) + j)] = check_cp_type(vf, v, X1, indices);
-			// cell index 1
-			indices[1] = i*r2 + (j+1);
-			vf[1][0] = U_fp[indices[1]], vf[1][1] = V_fp[indices[1]];
-			v[1][0] = U[indices[1]], v[1][1] = V[indices[1]];			
-			cp_type[2*(i * (r2-1) + j) + 1] = check_cp_type(vf, v, X2, indices);
-		}
-	}
 	T * U_pos = U_fp;
 	T * V_pos = V_fp;
 	T threshold = 1;
 	// conditions_2d cond;
+	// check cp and type for all cells
+	auto cp_type = compute_cp_and_type(U_fp, V_fp, U, V, r1, r2);
 	for(int i=0; i<r1; i++){
 		// printf("start %d row\n", i);
 		T * cur_U_pos = U_pos;
