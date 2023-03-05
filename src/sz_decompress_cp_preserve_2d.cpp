@@ -172,7 +172,8 @@ void
 sz_decompress_cp_preserve_2d_online<double>(const unsigned char * compressed, size_t r1, size_t r2, double *& U, double *& V);
 
 template<typename T, typename T_fp>
-void convert_to_floating_point(const T_fp * U_fp, const T_fp * V_fp, size_t num_elements, T * U, T * V, int64_t vector_field_scaling_factor){
+static void 
+convert_to_floating_point(const T_fp * U_fp, const T_fp * V_fp, size_t num_elements, T * U, T * V, int64_t vector_field_scaling_factor){
 	for(int i=0; i<num_elements; i++){
 		U[i] = U_fp[i] * (T)1.0 / vector_field_scaling_factor;
 		V[i] = V_fp[i] * (T)1.0 / vector_field_scaling_factor;
@@ -210,7 +211,6 @@ sz_decompress_cp_preserve_2d_online_fp(const unsigned char * compressed, size_t 
 	T * V_pos = V_fp;
 	int * eb_quant_index_pos = eb_quant_index;
 	int * data_quant_index_pos = data_quant_index;
-	// const double threshold=std::numeric_limits<float>::epsilon();
 	for(int i=0; i<r1; i++){
 		for(int j=0; j<r2; j++){
 			// get eb
@@ -236,16 +236,16 @@ sz_decompress_cp_preserve_2d_online_fp(const unsigned char * compressed, size_t 
 			data_quant_index_pos += 2;
 		}
 	}
-	int64_t max = std::numeric_limits<int64_t>::min();
-	int64_t min = std::numeric_limits<int64_t>::max();
-	printf("max = %lld, min = %lld\n", max, min);
-	for(int i=0; i<num_elements; i++){
-		max = std::max(max, U_fp[i]);
-		max = std::max(max, V_fp[i]);
-		min = std::min(min, U_fp[i]);
-		min = std::min(min, V_fp[i]);
-	}
-	printf("max = %lld, min = %lld\n", max, min);
+	// int64_t max = std::numeric_limits<int64_t>::min();
+	// int64_t min = std::numeric_limits<int64_t>::max();
+	// printf("max = %lld, min = %lld\n", max, min);
+	// for(int i=0; i<num_elements; i++){
+	// 	max = std::max(max, U_fp[i]);
+	// 	max = std::max(max, V_fp[i]);
+	// 	min = std::min(min, U_fp[i]);
+	// 	min = std::min(min, V_fp[i]);
+	// }
+	// printf("max = %lld, min = %lld\n", max, min);
 	free(eb_quant_index);
 	free(data_quant_index);
 	U = (T_data *) malloc(num_elements*sizeof(T_data));

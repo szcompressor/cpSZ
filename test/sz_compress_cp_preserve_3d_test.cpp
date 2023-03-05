@@ -25,7 +25,7 @@ int main(int argc, char ** argv){
     cout << "start Compression\n";
     // unsigned char * result =  sz_compress_cp_preserve_3d_offline_log(U, V, W, r1, r2, r3, result_size, false, max_eb);
     unsigned char * result =  sz_compress_cp_preserve_3d_online_log(U, V, W, r1, r2, r3, result_size, false, max_eb);
-    // exit(0);
+    // unsigned char * result =  sz_compress_cp_preserve_sos_3d_online_fp(U, V, W, r1, r2, r3, result_size, false, max_eb);
     unsigned char * result_after_lossless = NULL;
     size_t lossless_outsize = sz_lossless_compress(ZSTD_COMPRESSOR, 3, result, result_size, &result_after_lossless);
     err = clock_gettime(CLOCK_REALTIME, &end);
@@ -39,6 +39,7 @@ int main(int argc, char ** argv){
     float * dec_V = NULL;
     float * dec_W = NULL;
     sz_decompress_cp_preserve_3d_online_log<float>(result, r1, r2, r3, dec_U, dec_V, dec_W);
+    // sz_decompress_cp_preserve_3d_online_fp<float>(result, r1, r2, r3, dec_U, dec_V, dec_W);
     err = clock_gettime(CLOCK_REALTIME, &end);
     cout << "Decompression time: " << (double)(end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec)/(double)1000000000 << "s" << endl;
     free(result_after_lossless);

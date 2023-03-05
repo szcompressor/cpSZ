@@ -496,7 +496,6 @@ max_eb_to_keep_position_and_type_3d_online(const T u0, const T u1, const T u2, c
 	double M3 = c_4;
 	double M = M0 + M1 + M2 + M3;
 	if(M == 0){
-		if(same_direction(u0, u1, u2, u3) || same_direction(v0, v1, v2, v3) || same_direction(w0, w1, w2, w3)) return 1;
 		return 0;
 	}
 	bool flag[4];
@@ -734,44 +733,6 @@ sz_compress_cp_preserve_3d_online_log(const T * U, const T * V, const T * W, siz
 			{1, 1, 1}
 		}
 	};
-	ptrdiff_t simplex_offset[24];
-	{
-		ptrdiff_t * simplex_offset_pos = simplex_offset;
-		ptrdiff_t base = 0;
-		// offset = 0, 0, 0
-		for(int i=0; i<6; i++){
-			*(simplex_offset_pos++) = i;
-		}
-		// offset = -1, 0, 0
-		base = -6*dim0_offset;
-		*(simplex_offset_pos++) = base + 3;
-		*(simplex_offset_pos++) = base + 5;
-		// offset = 0, -1, 0
-		base = -6*dim1_offset;
-		*(simplex_offset_pos++) = base + 1;
-		*(simplex_offset_pos++) = base + 4;
-		// offset = -1, -1, 0
-		base = -6*dim0_offset - 6*dim1_offset;
-		*(simplex_offset_pos++) = base + 4;
-		*(simplex_offset_pos++) = base + 5;
-		// offset = 0, 0, -1
-		base = -6;
-		*(simplex_offset_pos++) = base + 0;
-		*(simplex_offset_pos++) = base + 2;
-		// offset = -1, 0, -1
-		base = -6*dim0_offset - 6;
-		*(simplex_offset_pos++) = base + 2;
-		*(simplex_offset_pos++) = base + 3;
-		// offset = 0, -1, -1
-		base = -6*dim1_offset - 6;
-		*(simplex_offset_pos++) = base + 0;
-		*(simplex_offset_pos++) = base + 1;
-		// offset = -1, -1, -1
-		base = -6*dim0_offset - 6*dim1_offset - 6;
-		for(int i=0; i<6; i++){
-			*(simplex_offset_pos++) = base + i;
-		}
-	}
 	int index_offset[24][3][3];
 	for(int i=0; i<24; i++){
 		for(int j=0; j<3; j++){
@@ -826,7 +787,6 @@ sz_compress_cp_preserve_3d_online_log(const T * U, const T * V, const T * W, siz
 						}
 					}
 					if(in_mesh){
-						int index = simplex_offset[n] + i*6*dim0_offset + j*6*dim1_offset + k*6; // TODO: define index for each simplex
 						required_eb = MIN(required_eb, max_eb_to_keep_position_and_type_3d_online(
 							cur_U_pos[offset[n][0]], cur_U_pos[offset[n][1]], cur_U_pos[offset[n][2]], *cur_U_pos,
 							cur_V_pos[offset[n][0]], cur_V_pos[offset[n][1]], cur_V_pos[offset[n][2]], *cur_V_pos,

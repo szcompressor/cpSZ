@@ -1,5 +1,4 @@
 #include "sz_cp_preserve_utils.hpp"
-#include "sz_compress_3d.hpp"
 #include "sz_compress_cp_preserve_2d.hpp"
 #include "sz_def.hpp"
 #include "sz_compression_utils.hpp"
@@ -8,12 +7,21 @@
 #include <ftk/numeric/fixed_point.hh>
 #include <ftk/numeric/gradient.hh>
 
+template <typename T> 
+static bool 
+same_direction(T u0, T u1, T u2) {
+    int sgn0 = sgn(u0);
+    if(sgn0 == 0) return false;
+    if((sgn0 == sgn(u1)) && (sgn0 == sgn(u2))) return true;
+    return false;
+}
+
 /*
 triangle mesh x0, x1, x2, derive cp-preserving eb for x2 given x0, x1
 using SoS method
 */
 template<typename T>
-T 
+static T 
 derive_cp_abs_eb_sos_online(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2){
 	T M0 = u2*v0 - u0*v2;
 	T M1 = u1*v2 - u2*v1;
@@ -21,24 +29,24 @@ derive_cp_abs_eb_sos_online(const T u0, const T u1, const T u2, const T v0, cons
 	T M = M0 + M1 + M2;
 	if(M == 0) return 0;
 	// keep sign for the original simplex
-	// preserve sign of (M + Ae1 + Be2)
 	T eb = std::abs(M) / (std::abs(u1 - u0) + std::abs(v0 - v1));
 	{
 		// keep sign for replacing the first and second vertices
 		T cur_eb = MINF(std::abs(u1*v2 - u2*v1) / (std::abs(u1) + std::abs(v1)), std::abs(u0*v2 - u2*v0) / (std::abs(u0) + std::abs(v0)));
 		eb = MINF(eb, cur_eb);
 	}
-	if(same_direction_2d(u0, u1, u2)){			
+	if(same_direction(u0, u1, u2)){			
 		eb = MAX(eb, std::abs(u2));
 	}
-	if(same_direction_2d(v0, v1, v2)){			
+	if(same_direction(v0, v1, v2)){			
 		eb = MAX(eb, std::abs(v2));
 	}
 	return eb;
 }
 
 template<typename T_fp>
-int check_cp(T_fp vf[3][2], int indices[3]){
+static int 
+check_cp(T_fp vf[3][2], int indices[3]){
 	// robust critical point test
 	bool succ = ftk::robust_critical_point_in_simplex2(vf, indices);
 	if (!succ) return -1;
@@ -46,7 +54,8 @@ int check_cp(T_fp vf[3][2], int indices[3]){
 }
 
 template<typename T_fp>
-vector<bool> compute_cp(const T_fp * U_fp, const T_fp * V_fp, int r1, int r2){
+static vector<bool> 
+compute_cp(const T_fp * U_fp, const T_fp * V_fp, int r1, int r2){
 	// check cp for all cells
 	vector<bool> cp_exist(2*(r1-1)*(r2-1), 0);
 	for(int i=0; i<r1-1; i++){
@@ -81,7 +90,8 @@ vector<bool> compute_cp(const T_fp * U_fp, const T_fp * V_fp, int r1, int r2){
 #define CENTER 6 // complex with 0 real
 
 template<typename T_fp, typename T>
-int check_cp_type(T_fp vf[3][2], T v[3][2], double X[3][2], int indices[3]){
+static int 
+check_cp_type(T_fp vf[3][2], T v[3][2], double X[3][2], int indices[3]){
 	// robust critical point test
 	bool succ = ftk::robust_critical_point_in_simplex2(vf, indices);
 	if (!succ) return -1;
@@ -120,7 +130,8 @@ int check_cp_type(T_fp vf[3][2], T v[3][2], double X[3][2], int indices[3]){
 }
 
 template<typename T_data, typename T_fp>
-vector<int> compute_cp_and_type(const T_fp * U_fp, const T_fp * V_fp, const T_data * U, const T_data * V, int r1, int r2){
+static vector<int> 
+compute_cp_and_type(const T_fp * U_fp, const T_fp * V_fp, const T_data * U, const T_data * V, int r1, int r2){
 	// order: x then y
 	double X1[3][2] = {
 		{0, 0},
@@ -335,14 +346,16 @@ vector<int> compute_cp_and_type(const T_fp * U_fp, const T_fp * V_fp, const T_da
 // sz_compress_cp_preserve_sos_2d_online(const double * U, const double * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb);
 
 template<typename T, typename T_fp>
-int64_t convert_to_fixed_point(const T * U, const T * V, size_t num_elements, T_fp * U_fp, T_fp * V_fp, T_fp& range, int minbits=8, int maxbits=21){
+static int64_t 
+convert_to_fixed_point(const T * U, const T * V, size_t num_elements, T_fp * U_fp, T_fp * V_fp, T_fp& range, int minbits=8, int maxbits=23){
 	double vector_field_resolution = std::numeric_limits<double>::max();
 	int64_t vector_field_scaling_factor = 1;
 	for (int i=0; i<num_elements; i++){
 		double min_val = std::min(fabs(U[i]), fabs(V[i]));
 		vector_field_resolution = std::min(vector_field_resolution, min_val);
 	}
-	int nbits = std::ceil(std::log2(1.0 / vector_field_resolution));
+	int nbits = maxbits;
+	if(vector_field_resolution) nbits = std::ceil(std::log2(1.0 / vector_field_resolution));
 	nbits = std::max(minbits, std::min(nbits, maxbits));
 	vector_field_scaling_factor = 1 << nbits;
 	std::cerr << "resolution=" << vector_field_resolution 
@@ -426,7 +439,6 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 	T * U_pos = U_fp;
 	T * V_pos = V_fp;
 	T threshold = 1;
-	// conditions_2d cond;
 	// check cp for all cells
 	vector<bool> cp_exist = compute_cp(U_fp, V_fp, r1, r2);
 	for(int i=0; i<r1; i++){
@@ -546,17 +558,6 @@ sz_compress_cp_preserve_sos_2d_online_fp(const float * U, const float * V, size_
 template
 unsigned char *
 sz_compress_cp_preserve_sos_2d_online_fp(const double * U, const double * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb);
-
-// variation with speculative compression on derived eb
-template<typename T>
-T relax_eb(T eb){
-	return eb * 2;
-}
-
-template<typename T>
-T restrict_eb(T eb){
-	return eb / 2;
-}
 
 template<typename T_data>
 unsigned char *

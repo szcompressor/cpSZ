@@ -4,6 +4,7 @@ add_library (cpsz SHARED
 	sz_compress_cp_preserve_2d_bilinear.cpp
 	sz_compress_cp_preserve_sos_2d.cpp
 	sz_compress_cp_preserve_3d.cpp
+	sz_compress_cp_preserve_sos_3d.cpp
 	sz_compress_3d.cpp
 	sz_compress_pwr.cpp
 	sz_decompression_utils.cpp
