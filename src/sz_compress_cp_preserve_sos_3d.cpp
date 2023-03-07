@@ -350,8 +350,8 @@ derive_cp_abs_eb_sos_online(const T u0, const T u1, const T u2, const T u3, cons
 	{
 		// keep sign for replacing the three other vertices
 		T cur_eb_0 = abs(M0)/(std::abs(det_2_by_2(v1, v2, w1, w2)) + std::abs(det_2_by_2(u1, u2, w1, w2)) + std::abs(det_2_by_2(u1, u2, v1, v2)));
-		T cur_eb_1 = abs(M1)/(std::abs(det_2_by_2(v0, v2, w0, w2)) + std::abs(det_2_by_2(u0, u2, w0, w2)) + std::abs(det_2_by_2(u0, u2, w0, w2)));
-		T cur_eb_2 = abs(M2)/(std::abs(det_2_by_2(v0, v1, w0, w1)) + std::abs(det_2_by_2(u0, u1, w0, w1)) + std::abs(det_2_by_2(u0, u1, w0, w1)));
+		T cur_eb_1 = abs(M1)/(std::abs(det_2_by_2(v0, v2, w0, w2)) + std::abs(det_2_by_2(u0, u2, w0, w2)) + std::abs(det_2_by_2(u0, u2, v0, v2)));
+		T cur_eb_2 = abs(M2)/(std::abs(det_2_by_2(v0, v1, w0, w1)) + std::abs(det_2_by_2(u0, u1, w0, w1)) + std::abs(det_2_by_2(u0, u1, v0, v1)));
 		eb = MINF(MINF(cur_eb_0, cur_eb_1), MINF(cur_eb_2, eb));
 	}
 	return eb;
