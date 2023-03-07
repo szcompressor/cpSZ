@@ -122,6 +122,11 @@ Huffman_encode_tree_and_data(size_t state_num, const int * type, size_t num_elem
 
 // variation with speculative compression on derived eb
 template<typename T>
+T relax_eb(T eb, T factor){
+	return eb * factor;
+}
+
+template<typename T>
 T relax_eb(T eb){
 	return eb * 2;
 }

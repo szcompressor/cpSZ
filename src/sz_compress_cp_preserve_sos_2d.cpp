@@ -581,7 +581,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 	const int capacity = 65536;
 	const int intv_radius = (capacity >> 1);
 	T max_eb = range * max_pwr_eb;
-	unpred_vec<T> unpred_data;
+	unpred_vec<T_data> unpred_data;
 	// offsets to get six adjacent triangle indices
 	// the 7-th rolls back to T0
 	/*
@@ -654,6 +654,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 			}
 			T abs_eb = required_eb;
 			if(abs_eb > 0){
+				bool unpred_flag = false;
 				// predict U and V
 				for(int k=0; k<2; k++){
 					T * cur_data_pos = (k == 0) ? cur_U_pos : cur_V_pos;
@@ -670,11 +671,11 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 					pred_residue[k] = data_ori[k] - pred[k];
 				}
 				// relax error bound
-				abs_eb = relax_eb(abs_eb);
+				abs_eb = relax_eb(abs_eb, (T) 8);
+				abs_eb = MINF(abs_eb, max_eb);
 				*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
-				bool verification_flag = true;
-				int round = 0;
-				while(round < 3){
+				while(true){
+					bool verification_flag = true;
 					// quantize using relaxed eb
 					for(int k=0; k<2; k++){
 						T diff = pred_residue[k];
@@ -691,61 +692,29 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 							}
 						}
 						else{
-							verification_flag = false;
+							unpred_flag = true;
+							verification_flag = true;
 							break;
 						}					
 					}
 					if(verification_flag) break;
 					abs_eb = restrict_eb(abs_eb);
-					*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
 					if(abs_eb < required_eb){
 						abs_eb = required_eb;
-						*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
-						break;
 					}
-					round ++;
+					*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
 				}			
-				if(verification_flag == false){
-					// compress using derived error bound
-					bool unpred_flag = false;
-					for(int k=0; k<2; k++){
-						T diff = pred_residue[k];
-						T quant_diff = std::abs(diff) / abs_eb + 1;
-						if(quant_diff < capacity){
-							quant_diff = (diff > 0) ? quant_diff : -quant_diff;
-							int quant_index = (int)(quant_diff/2) + intv_radius;
-							data_quant_index_pos[k] = quant_index;
-							decompressed[k] = pred[k] + 2 * (quant_index - intv_radius) * abs_eb; 
-							// check original data
-							if(std::abs(decompressed[k] - data_ori[k]) >= required_eb){
-								unpred_flag = true;
-								break;
-							}
-						}
-						else{
-							unpred_flag = true;
-							break;
-						}					
-					}
-					if(unpred_flag){
-						// recover quant index
-						*(eb_quant_index_pos ++) = 0;
-						*(data_quant_index_pos ++) = intv_radius;
-						*(data_quant_index_pos ++) = intv_radius;
-						unpred_data.push_back(*cur_U_pos);
-						unpred_data.push_back(*cur_V_pos);
-					}
-					else{
-						eb_quant_index_pos ++;
-						data_quant_index_pos += 2;
-						// assign decompressed data
-						*cur_U_pos = decompressed[0];
-						*cur_V_pos = decompressed[1];
-					}
+				if(unpred_flag){
+					// recover quant index
+					*(eb_quant_index_pos ++) = 0;
+					ptrdiff_t offset = cur_U_pos - U_fp;
+					unpred_data.push_back(U[offset]);
+					unpred_data.push_back(V[offset]);
 				}
 				else{
 					eb_quant_index_pos ++;
 					data_quant_index_pos += 2;
+					// assign decompressed data
 					*cur_U_pos = decompressed[0];
 					*cur_V_pos = decompressed[1];
 				}
@@ -753,10 +722,9 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 			else{
 				// record as unpredictable data
 				*(eb_quant_index_pos ++) = 0;
-				*(data_quant_index_pos ++) = intv_radius;
-				*(data_quant_index_pos ++) = intv_radius;
-				unpred_data.push_back(*cur_U_pos);
-				unpred_data.push_back(*cur_V_pos);
+				ptrdiff_t offset = cur_U_pos - U_fp;
+				unpred_data.push_back(U[offset]);
+				unpred_data.push_back(V[offset]);
 			}
 			cur_U_pos ++, cur_V_pos ++;
 		}
@@ -774,10 +742,14 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 	write_variable_to_dst(compressed_pos, intv_radius);
 	size_t unpredictable_count = unpred_data.size();
 	write_variable_to_dst(compressed_pos, unpredictable_count);
-	write_array_to_dst(compressed_pos, (T *)&unpred_data[0], unpredictable_count);	
-	Huffman_encode_tree_and_data(2*1024, eb_quant_index, num_elements, compressed_pos);
+	write_array_to_dst(compressed_pos, (T_data *)&unpred_data[0], unpredictable_count);	
+	size_t eb_quant_num = eb_quant_index_pos - eb_quant_index;
+	write_variable_to_dst(compressed_pos, eb_quant_num);
+	Huffman_encode_tree_and_data(2*1024, eb_quant_index, eb_quant_num, compressed_pos);
 	free(eb_quant_index);
-	Huffman_encode_tree_and_data(2*capacity, data_quant_index, 2*num_elements, compressed_pos);
+	size_t data_quant_num = data_quant_index_pos - data_quant_index;
+	write_variable_to_dst(compressed_pos, data_quant_num);
+	Huffman_encode_tree_and_data(2*capacity, data_quant_index, data_quant_num, compressed_pos);
 	printf("pos = %ld\n", compressed_pos - compressed);
 	free(data_quant_index);
 	compressed_size = compressed_pos - compressed;
@@ -815,7 +787,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(const T_data * U, const T_
 	const int capacity = 65536;
 	const int intv_radius = (capacity >> 1);
 	T max_eb = range * max_pwr_eb;
-	unpred_vec<T> unpred_data;
+	unpred_vec<T_data> unpred_data;
 	// offsets to get six adjacent triangle indices
 	// the 7-th rolls back to T0
 	/*
@@ -938,7 +910,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(const T_data * U, const T_
 						indices[2] = i*r2 + j;
 						// TODO: change stragegy and consider types
 						T vf[3][2];
-						for(int p=0; p<3; p++){
+						for(int p=0; p<2; p++){
 							vf[p][0] = U_fp[indices[p]];
 							vf[p][1] = V_fp[indices[p]];
 						}
@@ -960,10 +932,9 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(const T_data * U, const T_
 			if(unpred_flag){
 				// recover quant index
 				*(eb_quant_index_pos ++) = 0;
-				*(data_quant_index_pos ++) = intv_radius;
-				*(data_quant_index_pos ++) = intv_radius;
-				unpred_data.push_back(*cur_U_pos);
-				unpred_data.push_back(*cur_V_pos);
+				ptrdiff_t offset = cur_U_pos - U_fp;
+				unpred_data.push_back(U[offset]);
+				unpred_data.push_back(V[offset]);
 			}
 			else{
 				eb_quant_index_pos ++;
@@ -988,10 +959,14 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(const T_data * U, const T_
 	write_variable_to_dst(compressed_pos, intv_radius);
 	size_t unpredictable_count = unpred_data.size();
 	write_variable_to_dst(compressed_pos, unpredictable_count);
-	write_array_to_dst(compressed_pos, (T *)&unpred_data[0], unpredictable_count);	
-	Huffman_encode_tree_and_data(2*1024, eb_quant_index, num_elements, compressed_pos);
+	write_array_to_dst(compressed_pos, (T_data *)&unpred_data[0], unpredictable_count);	
+	size_t eb_quant_num = eb_quant_index_pos - eb_quant_index;
+	write_variable_to_dst(compressed_pos, eb_quant_num);
+	Huffman_encode_tree_and_data(2*1024, eb_quant_index, eb_quant_num, compressed_pos);
 	free(eb_quant_index);
-	Huffman_encode_tree_and_data(2*capacity, data_quant_index, 2*num_elements, compressed_pos);
+	size_t data_quant_num = data_quant_index_pos - data_quant_index;
+	write_variable_to_dst(compressed_pos, data_quant_num);
+	Huffman_encode_tree_and_data(2*capacity, data_quant_index, data_quant_num, compressed_pos);
 	printf("pos = %ld\n", compressed_pos - compressed);
 	free(data_quant_index);
 	compressed_size = compressed_pos - compressed;
@@ -1033,7 +1008,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 	const int capacity = 65536;
 	const int intv_radius = (capacity >> 1);
 	T max_eb = range * max_pwr_eb;
-	unpred_vec<T> unpred_data;
+	unpred_vec<T_data> unpred_data;
 	// offsets to get six adjacent triangle indices
 	// the 7-th rolls back to T0
 	/*
@@ -1170,10 +1145,9 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 			if(unpred_flag){
 				// recover quant index
 				*(eb_quant_index_pos ++) = 0;
-				*(data_quant_index_pos ++) = intv_radius;
-				*(data_quant_index_pos ++) = intv_radius;
-				unpred_data.push_back(*cur_U_pos);
-				unpred_data.push_back(*cur_V_pos);
+				ptrdiff_t offset = cur_U_pos - U_fp;
+				unpred_data.push_back(U[offset]);
+				unpred_data.push_back(V[offset]);
 			}
 			else{
 				eb_quant_index_pos ++;
@@ -1198,10 +1172,14 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 	write_variable_to_dst(compressed_pos, intv_radius);
 	size_t unpredictable_count = unpred_data.size();
 	write_variable_to_dst(compressed_pos, unpredictable_count);
-	write_array_to_dst(compressed_pos, (T *)&unpred_data[0], unpredictable_count);	
-	Huffman_encode_tree_and_data(2*1024, eb_quant_index, num_elements, compressed_pos);
+	write_array_to_dst(compressed_pos, (T_data *)&unpred_data[0], unpredictable_count);	
+	size_t eb_quant_num = eb_quant_index_pos - eb_quant_index;
+	write_variable_to_dst(compressed_pos, eb_quant_num);
+	Huffman_encode_tree_and_data(2*1024, eb_quant_index, eb_quant_num, compressed_pos);
 	free(eb_quant_index);
-	Huffman_encode_tree_and_data(2*capacity, data_quant_index, 2*num_elements, compressed_pos);
+	size_t data_quant_num = data_quant_index_pos - data_quant_index;
+	write_variable_to_dst(compressed_pos, data_quant_num);
+	Huffman_encode_tree_and_data(2*capacity, data_quant_index, data_quant_num, compressed_pos);
 	printf("pos = %ld\n", compressed_pos - compressed);
 	free(data_quant_index);
 	compressed_size = compressed_pos - compressed;
