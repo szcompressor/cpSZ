@@ -190,21 +190,21 @@ static vector<bool>
 compute_cp(const T_fp * U_fp, const T_fp * V_fp, const T_fp * W_fp, int r1, int r2, int r3){
 	// check cp for all cells
 	vector<bool> cp_exist(6*(r1-1)*(r2-1)*(r3-1), 0);
-	// vector<bool> cp_exist(6*r1*r2*r3, 0);
 	ptrdiff_t dim0_offset = r2*r3;
 	ptrdiff_t dim1_offset = r3;
 	ptrdiff_t cell_dim0_offset = (r2-1)*(r3-1);
 	ptrdiff_t cell_dim1_offset = r3-1;
 	int indices[4] = {0};
-	__int128 vf[4][3] = {0};
+	// __int128 vf[4][3] = {0};
+	int64_t vf[4][3] = {0};
 	for(int i=0; i<r1-1; i++){
 		for(int j=0; j<r2-1; j++){
 			for(int k=0; k<r3-1; k++){
 				bool verbose = false;
 				// order (reserved, z->x):
 				ptrdiff_t cell_offset = 6*(i*cell_dim0_offset + j*cell_dim1_offset + k);
-				// ptrdiff_t tmp_offset = 6*(i*dim0_offset + j*dim1_offset + k);
-				// if(tmp_offset == 4353132) verbose = true;
+				ptrdiff_t tmp_offset = 6*(i*dim0_offset + j*dim1_offset + k);
+				// if(tmp_offset/6 == 4001374/6) verbose = true;
 				// if(verbose){
 				// 	std::cout << i << " " << j << " " << k << std::endl;
 				// }
@@ -240,13 +240,30 @@ compute_cp(const T_fp * U_fp, const T_fp * V_fp, const T_fp * W_fp, int r1, int 
 				// (ftk-4) 000, 100, 101, 111
 				update_index(vf, indices, 1, i*dim0_offset + j*dim1_offset + k+1, U_fp, V_fp, W_fp);
 				cp_exist[cell_offset + 3] = (check_cp(vf, indices) == 1);
+				// if(verbose){
+				// 	auto offset = cell_offset + 3;
+				// 	std::cout << "cell id = " << offset << ", cp = " << +cp_exist[offset] << std::endl;
+				// 	std::cout << "indices: ";
+				// 	for(int i=0; i<4; i++){
+				// 		std::cout << indices[i] << " "; 
+				// 	}
+				// 	std::cout << std::endl;
+				// 	T_fp tmp[4][3];
+				// 	for(int i=0; i<4; i++){
+				// 		for(int j=0; j<3; j++){
+				// 			tmp[i][j] = vf[i][j];
+				// 		}
+				// 	}
+
+				// 	ftk::print4x3("M:", tmp);
+				// }
 				// (ftk-3) 000, 010, 110, 111
 				update_index(vf, indices, 1, i*dim0_offset + (j+1)*dim1_offset + k, U_fp, V_fp, W_fp);
 				update_index(vf, indices, 2, i*dim0_offset + (j+1)*dim1_offset + k+1, U_fp, V_fp, W_fp);
 				cp_exist[cell_offset + 4] = (check_cp(vf, indices) == 1);
 				// if(verbose){
 				// 	auto offset = cell_offset + 4;
-				// 	std::cout << "cell id = " << offset << ", cp =" << +cp_exist[offset] << std::endl;
+				// 	std::cout << "cell id = " << offset << ", cp = " << +cp_exist[offset] << std::endl;
 				// 	std::cout << "indices: ";
 				// 	for(int i=0; i<4; i++){
 				// 		std::cout << indices[i] << " "; 
@@ -295,18 +312,25 @@ static inline T
 abs(const T u){
 	return (u>0) ? u : -u;
 }
+
+std::ostream& operator<<(std::ostream& o, const __int128& x) {
+    if (x == std::numeric_limits<__int128>::min()) return o << "-170141183460469231731687303715884105728";
+    if (x < 0) return o << "-" << -x;
+    if (x < 10) return o << (char)(x + '0');
+    return o << x / 10 << (char)(x % 10 + '0');
+}
 /*
 Tet x0, x1, x2, x3, derive cp-preserving eb for x3 given x0, x1, x2
 using SoS method
 */
-template<typename T_acc, typename T>
+template<typename T>
 static T 
-derive_cp_abs_eb_sos_online(const T u0, const T u1, const T u2, const T u3, const T v0, const T v1, const T v2, const T v3, const T w0, const T w1, const T w2, const T w3){
-	T_acc M0 = - det_3_by_3(u1, u2, u3, v1, v2, v3, w1, w2, w3);
-	T_acc M1 = + det_3_by_3(u0, u2, u3, v0, v2, v3, w0, w2, w3);
-	T_acc M2 = - det_3_by_3(u0, u1, u3, v0, v1, v3, w0, w1, w3);
-	T_acc M3 = + det_3_by_3(u0, u1, u2, v0, v1, v2, w0, w1, w2);
-	T_acc M = M0 + M1 + M2 + M3;
+derive_cp_abs_eb_sos_online(const T u0, const T u1, const T u2, const T u3, const T v0, const T v1, const T v2, const T v3, const T w0, const T w1, const T w2, const T w3, bool verbose=false){
+	T M0 = - det_3_by_3(u1, u2, u3, v1, v2, v3, w1, w2, w3);
+	T M1 = + det_3_by_3(u0, u2, u3, v0, v2, v3, w0, w2, w3);
+	T M2 = - det_3_by_3(u0, u1, u3, v0, v1, v3, w0, w1, w3);
+	T M3 = + det_3_by_3(u0, u1, u2, v0, v1, v2, w0, w1, w2);
+	T M = M0 + M1 + M2 + M3;
 	if(M == 0) return 0;
 	T same_eb = 0;
 	if(same_direction(u0, u1, u2, u3)){			
@@ -321,34 +345,97 @@ derive_cp_abs_eb_sos_online(const T u0, const T u1, const T u2, const T u3, cons
 	if(same_eb != 0) return same_eb;
 	// keep sign for the original simplex
 	T one = 1;
-	T denominator = abs(det_3_by_3<T_acc>(v0, v1, v2, w0, w1, w2, one, one, one)) + abs(det_3_by_3<T_acc>(u0, u1, u2, w0, w1, w2, one, one, one)) + abs(det_3_by_3<T_acc>(u0, u1, u2, v0, v1, v2, one, one, one)); 
+	T denominator = abs(det_3_by_3(v0, v1, v2, w0, w1, w2, one, one, one)) + abs(det_3_by_3(u0, u1, u2, w0, w1, w2, one, one, one)) + abs(det_3_by_3(u0, u1, u2, v0, v1, v2, one, one, one)); 
 	T eb = abs(M) / denominator;
 	{
 		// keep sign for replacing the three other vertices
-		T cur_eb_0 = abs(M0)/(std::abs(det_2_by_2(v1, v2, w1, w2)) + std::abs(det_2_by_2(u1, u2, w1, w2)) + std::abs(det_2_by_2(v1, v2, w1, w2)));
-		T cur_eb_1 = abs(M1)/(std::abs(det_2_by_2(v0, v2, w0, w2)) + std::abs(det_2_by_2(u0, u2, w0, w2)) + std::abs(det_2_by_2(v0, v2, w0, w2)));
-		T cur_eb_2 = abs(M2)/(std::abs(det_2_by_2(v0, v1, w0, w1)) + std::abs(det_2_by_2(u0, u1, w0, w1)) + std::abs(det_2_by_2(v0, v1, w0, w1)));
+		T cur_eb_0 = abs(M0)/(std::abs(det_2_by_2(v1, v2, w1, w2)) + std::abs(det_2_by_2(u1, u2, w1, w2)) + std::abs(det_2_by_2(u1, u2, v1, v2)));
+		T cur_eb_1 = abs(M1)/(std::abs(det_2_by_2(v0, v2, w0, w2)) + std::abs(det_2_by_2(u0, u2, w0, w2)) + std::abs(det_2_by_2(u0, u2, w0, w2)));
+		T cur_eb_2 = abs(M2)/(std::abs(det_2_by_2(v0, v1, w0, w1)) + std::abs(det_2_by_2(u0, u1, w0, w1)) + std::abs(det_2_by_2(u0, u1, w0, w1)));
 		eb = MINF(MINF(cur_eb_0, cur_eb_1), MINF(cur_eb_2, eb));
 	}
 	return eb;
 }
 
+template<typename T_acc, typename T>
+static T 
+derive_cp_abs_eb_sos_online_acc(const T u0, const T u1, const T u2, const T u3, const T v0, const T v1, const T v2, const T v3, const T w0, const T w1, const T w2, const T w3, bool verbose=false){
+	T_acc M0 = - det_3_by_3<T_acc>(u1, u2, u3, v1, v2, v3, w1, w2, w3);
+	// if(verbose){
+	// 	std::cout << "M0 = " << M0 << std::endl;
+	// }
+	T_acc M1 = + det_3_by_3<T_acc>(u0, u2, u3, v0, v2, v3, w0, w2, w3);
+	// if(verbose){
+	// 	std::cout << "M1 = " << M1 << std::endl;
+	// }
+	T_acc M2 = - det_3_by_3<T_acc>(u0, u1, u3, v0, v1, v3, w0, w1, w3);
+	// if(verbose){
+	// 	std::cout << "M2 = " << M2 << std::endl;
+	// }
+	T_acc M3 = + det_3_by_3<T_acc>(u0, u1, u2, v0, v1, v2, w0, w1, w2);
+	// if(verbose){
+	// 	std::cout << "M3 = " << M3 << std::endl;
+	// }
+	T_acc M = M0 + M1 + M2 + M3;
+	// if(verbose){
+	// 	std::cout << u0 << " " << v0 << " " << w0 << std::endl;
+	// 	std::cout << u1 << " " << v1 << " " << w1 << std::endl;
+	// 	std::cout << u2 << " " << v2 << " " << w2 << std::endl;
+	// 	std::cout << u3 << " " << v3 << " " << w3 << std::endl;
+	// 	std::cout << "det = " << M << ": " << M0 << " " << M1 << " " << M2 << " " << M3 << std::endl;
+	// }
+	if(M == 0) return 0;
+	T same_eb = 0;
+	if(same_direction(u0, u1, u2, u3)){			
+		same_eb = MAX(same_eb, std::abs(u3));
+	}
+	if(same_direction(v0, v1, v2, v3)){			
+		same_eb = MAX(same_eb, std::abs(v3));
+	}
+	if(same_direction(w0, w1, w2, w3)){			
+		same_eb = MAX(same_eb, std::abs(w3));
+	}
+	// if(verbose){
+	// 	std::cout << "same_eb = " << same_eb << std::endl;
+	// }
+	if(same_eb != 0) return same_eb;
+	// keep sign for the original simplex
+	T one = 1;
+	T_acc denominator = abs(det_3_by_3(v0, v1, v2, w0, w1, w2, one, one, one)) + abs(det_3_by_3(u0, u1, u2, w0, w1, w2, one, one, one)) + abs(det_3_by_3(u0, u1, u2, v0, v1, v2, one, one, one)); 
+	T_acc eb = abs(M) / denominator;
+	{
+		// keep sign for replacing the three other vertices
+		T_acc cur_eb_0 = abs(M0)/(std::abs(det_2_by_2(v1, v2, w1, w2)) + std::abs(det_2_by_2(u1, u2, w1, w2)) + std::abs(det_2_by_2(u1, u2, v1, v2)));
+		T_acc cur_eb_1 = abs(M1)/(std::abs(det_2_by_2(v0, v2, w0, w2)) + std::abs(det_2_by_2(u0, u2, w0, w2)) + std::abs(det_2_by_2(u0, u2, v0, v2)));
+		T_acc cur_eb_2 = abs(M2)/(std::abs(det_2_by_2(v0, v1, w0, w1)) + std::abs(det_2_by_2(u0, u1, w0, w1)) + std::abs(det_2_by_2(u0, u1, v0, v1)));
+		// if(verbose){
+		// 	T d1 = det_2_by_2(v1, v2, w1, w2);
+		// 	T d2 = det_2_by_2(u1, u2, w1, w2);
+		// 	T d3 = det_2_by_2(u1, u2, v1, v2);
+		// 	std::cout << "denominator 1 = " << d1 << " " << d2 << " " << d3 << std::endl;
+		// 	std::cout << "M0 = " << (T_acc) u3 * d1 - (T_acc) v3 * d2 + (T_acc) w3 * d3 << std::endl;
+		// 	std::cout << "eb 1-3 = " << cur_eb_0 << " " << cur_eb_1 << " " << cur_eb_2 << std::endl;
+		// }
+		eb = MINF(MINF(cur_eb_0, cur_eb_1), MINF(cur_eb_2, eb));
+	}
+	return (T) MINF(eb, (T_acc) std::numeric_limits<int64_t>::max());
+}
+
 template<typename T, typename T_fp>
 static int64_t 
-convert_to_fixed_point(const T * U, const T * V, const T * W, size_t num_elements, T_fp * U_fp, T_fp * V_fp, T_fp * W_fp, T_fp& range, int minbits=8, int maxbits=23){
-	double vector_field_resolution = std::numeric_limits<double>::max();
+convert_to_fixed_point(const T * U, const T * V, const T * W, size_t num_elements, T_fp * U_fp, T_fp * V_fp, T_fp * W_fp, T_fp& range, int type_bits=63){
+	double vector_field_resolution = 0;
 	int64_t vector_field_scaling_factor = 1;
 	for (int i=0; i<num_elements; i++){
-		double min_val = std::min(std::min(fabs(U[i]), fabs(V[i])), fabs(W[i]));
-		vector_field_resolution = std::min(vector_field_resolution, min_val);
+		double min_val = std::max(std::max(fabs(U[i]), fabs(V[i])), fabs(W[i]));
+		vector_field_resolution = std::max(vector_field_resolution, min_val);
 	}
-	int nbits = maxbits;
-	if(vector_field_resolution) nbits = std::ceil(std::log2(1.0 / vector_field_resolution));
-	nbits = std::max(minbits, std::min(nbits, maxbits));
-	vector_field_scaling_factor = 1 << nbits;
+	int vbits = std::ceil(std::log2(vector_field_resolution));
+	int nbits = (type_bits - 5) / 3;
+	vector_field_scaling_factor = 1 << (nbits - vbits);
 	std::cerr << "resolution=" << vector_field_resolution 
 	<< ", factor=" << vector_field_scaling_factor 
-	<< ", nbits=" << nbits << std::endl;
+	<< ", nbits=" << nbits << ", vbits=" << vbits << ", shift_bits=" << nbits - vbits << std::endl;
 	int64_t max = std::numeric_limits<int64_t>::min();
 	int64_t min = std::numeric_limits<int64_t>::max();
 	printf("max = %lld, min = %lld\n", max, min);
@@ -365,22 +452,6 @@ convert_to_fixed_point(const T * U, const T * V, const T * W, size_t num_element
 	}
 	printf("max = %lld, min = %lld\n", max, min);
 	range = max - min;
-	// {
-	// 	// test 
-	// 	// (id==20588) || (id==21100) || (id==21101) || (id==283245)
-	// 	int tmp[4] = {20588, 21100, 21101, 283245};
-	// 	for(int i=0; i<4; i++){
-	// 		auto id = tmp[i];
-	// 		std::cout << U_fp[id] << " " << V_fp[id] << " " << W_fp[id] << std::endl;
-	// 		T U = U_fp[id] * (T)1.0 / vector_field_scaling_factor;
-	// 		T V = V_fp[id] * (T)1.0 / vector_field_scaling_factor;
-	// 		T W = W_fp[id] * (T)1.0 / vector_field_scaling_factor;
-	// 		T_fp U_ = U * vector_field_scaling_factor;
-	// 		T_fp V_ = V * vector_field_scaling_factor;
-	// 		T_fp W_ = W * vector_field_scaling_factor;
-	// 		std::cout << U_ << " " << V_ << " " << W_ << std::endl;
-	// 	}
-	// }
 	return vector_field_scaling_factor;
 }
 
@@ -460,7 +531,6 @@ sz_compress_cp_preserve_sos_3d_online_fp(const T_data * U, const T_data * V, con
 	ptrdiff_t offset[24][3];
 	for(int i=0; i<24; i++){
 		for(int x=0; x<3; x++){
-			// offset[i][x] = (coordinates[i][x][0] - coordinates[i][3][0]) * dim0_offset + (coordinates[i][x][1] - coordinates[i][3][1]) * dim1_offset + (coordinates[i][x][2] - coordinates[i][3][2]);
 			offset[i][x] = (coordinates[i][x][0] - coordinates[i][3][0]) + (coordinates[i][x][1] - coordinates[i][3][1]) * dim1_offset + (coordinates[i][x][2] - coordinates[i][3][2]) * dim0_offset;
 		}
 	}
@@ -471,20 +541,20 @@ sz_compress_cp_preserve_sos_3d_online_fp(const T_data * U, const T_data * V, con
 	// check cp for all cells
 	std::cout << "start cp checking\n";
 	vector<bool> cp_exist = compute_cp(U_fp, V_fp, W_fp, r1, r2, r3);
-	// {
-	// 	int count = 0;
-	// 	for(int m=0; m<cp_exist.size(); m++){
-	// 		auto tmp = m;
-	// 		int i = tmp / dim0_offset;
-	// 		tmp = tmp % dim0_offset;
-	// 		int j = tmp / dim1_offset;
-	// 		tmp = tmp % dim1_offset;
-	// 		int k = tmp;
-	// 		if(cp_exist[m]) count ++;
-	// 	}
-	// 	std::cout << count << std::endl;
-	// 	std::cout << + cp_exist[4338498] << std::endl;
-	// }
+	{
+		int count = 0;
+		for(int m=0; m<cp_exist.size(); m++){
+			auto tmp = m;
+			int i = tmp / dim0_offset;
+			tmp = tmp % dim0_offset;
+			int j = tmp / dim1_offset;
+			tmp = tmp % dim1_offset;
+			int k = tmp;
+			if(cp_exist[m]) count ++;
+		}
+		std::cout << count << std::endl;
+		// exit(0);
+	}
 	std::cout << "start compression\n";
 	for(int i=0; i<r1; i++){
 		for(int j=0; j<r2; j++){
@@ -502,34 +572,55 @@ sz_compress_cp_preserve_sos_3d_online_fp(const T_data * U, const T_data * V, con
 					}
 					if(in_mesh){
 						int index = simplex_offset[n] + 6*(i*(r2-1)*(r3-1) + j*(r3-1) + k);
-						// if(i*dim0_offset + j*dim1_offset + k == 987666){
-						// 	std::cout << "simplex id = " << index << std::endl;
-						// 	for(int i=0; i<3; i++){
-						// 		std::cout << 987666 + offset[n][i] << " ";
-						// 	}
-						// 	std::cout << i*dim0_offset + j*dim1_offset + k << std::endl;
-						// 	std::cout << "cp[" << index << "] = " << +cp_exist[index] << std::endl;
-						// }
 						if(cp_exist[index]){
 							required_eb = 0;
 							break;
 						}
-						required_eb = MINF(required_eb, derive_cp_abs_eb_sos_online<__int128, int64_t>(
+						// bool verbose = false;
+						// int ftk_index = i*dim0_offset + j*dim1_offset + k;
+						// if(index == 3987429){
+						// 	std::cout << "\nsimplex " << n << std::endl;
+						// 	std::cout << "cp_exist = " << +cp_exist[index] << std::endl;
+						// 	std::cout << "actual cell index = " << index << ": ";
+						// 	std::cout << i << " " << j << " " << k << std::endl;
+						// 	verbose = true;
+						// 	__int128 vf[4][3];
+						// 	int indices[4];
+						// 	int ftk_index = i*dim0_offset + j*dim1_offset + k;
+						// 	for(int i=0; i<3; i++){
+						// 		indices[i] = ftk_index + offset[n][i];
+						// 	}
+						// 	indices[3] = ftk_index;
+						// 	for(int i=0; i<4; i++){
+						// 		std::cout << indices[i] << " ";
+						// 	}
+						// 	std::cout << std::endl;
+						// 	vf[0][0] = cur_U_pos[offset[n][0]], vf[1][0] = cur_U_pos[offset[n][1]], vf[2][0] = cur_U_pos[offset[n][2]], vf[3][0] = *cur_U_pos;
+						// 	vf[0][1] = cur_V_pos[offset[n][0]], vf[1][1] = cur_V_pos[offset[n][1]], vf[2][1] = cur_V_pos[offset[n][2]], vf[3][1] = *cur_V_pos;
+						// 	vf[0][2] = cur_W_pos[offset[n][0]], vf[1][2] = cur_W_pos[offset[n][1]], vf[2][2] = cur_W_pos[offset[n][2]], vf[3][2] = *cur_W_pos;
+						// 	std::cout << "cp_exist before compression = " << check_cp(vf, indices) << std::endl;
+
+						// }
+						required_eb = MINF(required_eb, derive_cp_abs_eb_sos_online(
 							cur_U_pos[offset[n][0]], cur_U_pos[offset[n][1]], cur_U_pos[offset[n][2]], *cur_U_pos,
 							cur_V_pos[offset[n][0]], cur_V_pos[offset[n][1]], cur_V_pos[offset[n][2]], *cur_V_pos,
 							cur_W_pos[offset[n][0]], cur_W_pos[offset[n][1]], cur_W_pos[offset[n][2]], *cur_W_pos));
+						// required_eb = MINF(required_eb, derive_cp_abs_eb_sos_online_acc<__int128, int64_t>(
+						// 	cur_U_pos[offset[n][0]], cur_U_pos[offset[n][1]], cur_U_pos[offset[n][2]], *cur_U_pos,
+						// 	cur_V_pos[offset[n][0]], cur_V_pos[offset[n][1]], cur_V_pos[offset[n][2]], *cur_V_pos,
+						// 	cur_W_pos[offset[n][0]], cur_W_pos[offset[n][1]], cur_W_pos[offset[n][2]], *cur_W_pos));
+						// if(verbose) exit(0);
 					}
 				}
 				// {
 				// 	int id = i*dim0_offset + j*dim1_offset + k;
-				// 	int target[4] = {725522, 987666, 988178, 988179};
+				// 	int target[4] = {666895, 666896, 929040, 929552};
 				// 	if((id==target[0]) || (id==target[1]) || (id==target[2]) || (id==target[3])){
 				// 		std::cout << id << ": eb = " << required_eb << std::endl;
 				// 	}
 				// }
 				T abs_eb = required_eb;
 				*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
-				// if(verbose) std::cout << std::endl << required_eb << " " << abs_eb << " unpred_size = " << unpred_data.size() << std::endl;
 				if(abs_eb > 0){
 					bool unpred_flag = false;
 					T decompressed[3];
@@ -613,7 +704,7 @@ sz_compress_cp_preserve_sos_3d_online_fp(const T_data * U, const T_data * V, con
 	write_array_to_dst(compressed_pos, (T_data *)&unpred_data[0], unpredictable_count);	
 	size_t eb_quant_num = eb_quant_index_pos - eb_quant_index;
 	write_variable_to_dst(compressed_pos, eb_quant_num);
-	Huffman_encode_tree_and_data(2*1024, eb_quant_index, num_elements, compressed_pos);
+	Huffman_encode_tree_and_data(2*1024, eb_quant_index, eb_quant_num, compressed_pos);
 	free(eb_quant_index);
 	size_t data_quant_num = data_quant_index_pos - data_quant_index;
 	write_variable_to_dst(compressed_pos, data_quant_num);

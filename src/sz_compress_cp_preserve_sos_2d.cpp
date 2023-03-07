@@ -347,20 +347,19 @@ compute_cp_and_type(const T_fp * U_fp, const T_fp * V_fp, const T_data * U, cons
 
 template<typename T, typename T_fp>
 static int64_t 
-convert_to_fixed_point(const T * U, const T * V, size_t num_elements, T_fp * U_fp, T_fp * V_fp, T_fp& range, int minbits=8, int maxbits=23){
-	double vector_field_resolution = std::numeric_limits<double>::max();
+convert_to_fixed_point(const T * U, const T * V, size_t num_elements, T_fp * U_fp, T_fp * V_fp, T_fp& range, int type_bits=63){
+	double vector_field_resolution = 0;
 	int64_t vector_field_scaling_factor = 1;
 	for (int i=0; i<num_elements; i++){
-		double min_val = std::min(fabs(U[i]), fabs(V[i]));
-		vector_field_resolution = std::min(vector_field_resolution, min_val);
+		double min_val = std::max(fabs(U[i]), fabs(V[i]));
+		vector_field_resolution = std::max(vector_field_resolution, min_val);
 	}
-	int nbits = maxbits;
-	if(vector_field_resolution) nbits = std::ceil(std::log2(1.0 / vector_field_resolution));
-	nbits = std::max(minbits, std::min(nbits, maxbits));
-	vector_field_scaling_factor = 1 << nbits;
+	int vbits = std::ceil(std::log2(vector_field_resolution));
+	int nbits = (type_bits - 3) / 2;
+	vector_field_scaling_factor = 1 << (nbits - vbits);
 	std::cerr << "resolution=" << vector_field_resolution 
 	<< ", factor=" << vector_field_scaling_factor 
-	<< ", nbits=" << nbits << std::endl;
+	<< ", nbits=" << nbits << ", vbits=" << vbits << ", shift_bits=" << nbits - vbits << std::endl;
 	int64_t max = std::numeric_limits<int64_t>::min();
 	int64_t min = std::numeric_limits<int64_t>::max();
 	printf("max = %lld, min = %lld\n", max, min);
@@ -399,7 +398,7 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 	const int capacity = 65536;
 	const int intv_radius = (capacity >> 1);
 	T max_eb = range * max_pwr_eb;
-	unpred_vec<T> unpred_data;
+	unpred_vec<T_data> unpred_data;
 	// offsets to get six adjacent triangle indices
 	// the 7-th rolls back to T0
 	/*
@@ -503,10 +502,9 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 				if(unpred_flag){
 					// recover quant index
 					*(eb_quant_index_pos ++) = 0;
-					*(data_quant_index_pos ++) = intv_radius;
-					*(data_quant_index_pos ++) = intv_radius;
-					unpred_data.push_back(*cur_U_pos);
-					unpred_data.push_back(*cur_V_pos);
+					ptrdiff_t offset = cur_U_pos - U_fp;
+					unpred_data.push_back(U[offset]);
+					unpred_data.push_back(V[offset]);
 				}
 				else{
 					eb_quant_index_pos ++;
@@ -519,10 +517,9 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 			else{
 				// record as unpredictable data
 				*(eb_quant_index_pos ++) = 0;
-				*(data_quant_index_pos ++) = intv_radius;
-				*(data_quant_index_pos ++) = intv_radius;
-				unpred_data.push_back(*cur_U_pos);
-				unpred_data.push_back(*cur_V_pos);
+				ptrdiff_t offset = cur_U_pos - U_fp;
+				unpred_data.push_back(U[offset]);
+				unpred_data.push_back(V[offset]);
 			}
 			cur_U_pos ++, cur_V_pos ++;
 		}
@@ -540,10 +537,14 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 	write_variable_to_dst(compressed_pos, intv_radius);
 	size_t unpredictable_count = unpred_data.size();
 	write_variable_to_dst(compressed_pos, unpredictable_count);
-	write_array_to_dst(compressed_pos, (T *)&unpred_data[0], unpredictable_count);	
-	Huffman_encode_tree_and_data(2*1024, eb_quant_index, num_elements, compressed_pos);
+	write_array_to_dst(compressed_pos, (T_data *)&unpred_data[0], unpredictable_count);	
+	size_t eb_quant_num = eb_quant_index_pos - eb_quant_index;
+	write_variable_to_dst(compressed_pos, eb_quant_num);
+	Huffman_encode_tree_and_data(2*1024, eb_quant_index, eb_quant_num, compressed_pos);
 	free(eb_quant_index);
-	Huffman_encode_tree_and_data(2*capacity, data_quant_index, 2*num_elements, compressed_pos);
+	size_t data_quant_num = data_quant_index_pos - data_quant_index;
+	write_variable_to_dst(compressed_pos, data_quant_num);
+	Huffman_encode_tree_and_data(2*capacity, data_quant_index, data_quant_num, compressed_pos);
 	printf("pos = %ld\n", compressed_pos - compressed);
 	free(data_quant_index);
 	compressed_size = compressed_pos - compressed;

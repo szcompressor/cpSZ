@@ -200,10 +200,15 @@ sz_decompress_cp_preserve_2d_online_fp(const unsigned char * compressed, size_t 
 	const int capacity = (intv_radius << 1);
 	size_t unpred_data_count = 0;
 	read_variable_from_src(compressed_pos, unpred_data_count);
-	const T * unpred_data_pos = (T *) compressed_pos;
-	compressed_pos += unpred_data_count*sizeof(T);
-	int * eb_quant_index = Huffman_decode_tree_and_data(2*1024, num_elements, compressed_pos);
-	int * data_quant_index = Huffman_decode_tree_and_data(2*capacity, 2*num_elements, compressed_pos);
+	const T_data * unpred_data = (T_data *) compressed_pos;
+	const T_data * unpred_data_pos = unpred_data;
+	compressed_pos += unpred_data_count*sizeof(T_data);
+	size_t eb_quant_num = 0;
+	read_variable_from_src(compressed_pos, eb_quant_num);
+	int * eb_quant_index = Huffman_decode_tree_and_data(2*1024, eb_quant_num, compressed_pos);
+	size_t data_quant_num = 0;
+	read_variable_from_src(compressed_pos, data_quant_num);
+	int * data_quant_index = Huffman_decode_tree_and_data(2*capacity, data_quant_num, compressed_pos);
 	printf("pos = %ld\n", compressed_pos - compressed);
 	T * U_fp = (T *) malloc(num_elements*sizeof(T));
 	T * V_fp = (T *) malloc(num_elements*sizeof(T));
@@ -211,12 +216,15 @@ sz_decompress_cp_preserve_2d_online_fp(const unsigned char * compressed, size_t 
 	T * V_pos = V_fp;
 	int * eb_quant_index_pos = eb_quant_index;
 	int * data_quant_index_pos = data_quant_index;
+	std::vector<int> unpred_data_indices;
 	for(int i=0; i<r1; i++){
 		for(int j=0; j<r2; j++){
 			// get eb
 			if(*eb_quant_index_pos == 0){
-				*U_pos = *(unpred_data_pos ++);
-				*V_pos = *(unpred_data_pos ++);
+				size_t offset = U_pos - U_fp;
+				unpred_data_indices.push_back(offset);
+				*U_pos = *(unpred_data_pos ++) * vector_field_scaling_factor;
+				*V_pos = *(unpred_data_pos ++) * vector_field_scaling_factor;
 				eb_quant_index_pos ++;
 			}
 			else{
@@ -230,27 +238,22 @@ sz_decompress_cp_preserve_2d_online_fp(const unsigned char * compressed, size_t 
 					T pred = d1 + d2 - d0;
 					*cur_data_pos = pred + 2 * (data_quant_index_pos[k] - intv_radius) * eb;
 				}
+				data_quant_index_pos += 2;
 			}
 			U_pos ++;
 			V_pos ++;
-			data_quant_index_pos += 2;
 		}
 	}
-	// int64_t max = std::numeric_limits<int64_t>::min();
-	// int64_t min = std::numeric_limits<int64_t>::max();
-	// printf("max = %lld, min = %lld\n", max, min);
-	// for(int i=0; i<num_elements; i++){
-	// 	max = std::max(max, U_fp[i]);
-	// 	max = std::max(max, V_fp[i]);
-	// 	min = std::min(min, U_fp[i]);
-	// 	min = std::min(min, V_fp[i]);
-	// }
-	// printf("max = %lld, min = %lld\n", max, min);
 	free(eb_quant_index);
 	free(data_quant_index);
 	U = (T_data *) malloc(num_elements*sizeof(T_data));
 	V = (T_data *) malloc(num_elements*sizeof(T_data));
 	convert_to_floating_point(U_fp, V_fp, num_elements, U, V, vector_field_scaling_factor);
+	unpred_data_pos = unpred_data;
+	for(const auto& index:unpred_data_indices){
+		U[index] = *(unpred_data_pos++);
+		V[index] = *(unpred_data_pos++);
+	}
 	free(U_fp);
 	free(V_fp);
 }
