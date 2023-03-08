@@ -13,6 +13,8 @@ int main(int argc, char ** argv){
     int r2 = atoi(argv[5]);
     int r3 = atoi(argv[6]);
     double max_eb = atof(argv[7]);
+    int option = 0;
+    if(argc > 8) option = atoi(argv[8]);
     // cout << U[r2 + 3] << " " << U[3*r2 + 1] << endl;
     // transpose_2d(U, r1, r2);
     // cout << U[r2 + 3] << " " << U[3*r2 + 1] << endl;
@@ -23,9 +25,20 @@ int main(int argc, char ** argv){
     int err = 0;
     err = clock_gettime(CLOCK_REALTIME, &start);
     cout << "start Compression\n";
+    cout << "option = " << option << std::endl;
     // unsigned char * result =  sz_compress_cp_preserve_3d_offline_log(U, V, W, r1, r2, r3, result_size, false, max_eb);
     // unsigned char * result =  sz_compress_cp_preserve_3d_online_log(U, V, W, r1, r2, r3, result_size, false, max_eb);
-    unsigned char * result =  sz_compress_cp_preserve_sos_3d_online_fp(U, V, W, r1, r2, r3, result_size, false, max_eb);
+    // unsigned char * result =  sz_compress_cp_preserve_sos_3d_online_fp(U, V, W, r1, r2, r3, result_size, false, max_eb);
+    unsigned char * result = NULL;
+    if(option == 0) result = sz_compress_cp_preserve_sos_3d_online_fp(U, V, W, r1, r2, r3, result_size, false, max_eb);
+    else if(option == 1) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_eb(U, V, W, r1, r2, r3, result_size, false, max_eb);
+    else if(option == 2) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_fn(U, V, W, r1, r2, r3, result_size, false, max_eb);
+    else if(option == 3) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_fn(U, V, W, r1, r2, r3, result_size, false, max_eb, 64);
+    else if(option == 4) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_all(U, V, W, r1, r2, r3, result_size, false, max_eb, 64);
+    else{
+        std::cerr << "Option not supported\n";
+        exit(0);
+    }
     unsigned char * result_after_lossless = NULL;
     size_t lossless_outsize = sz_lossless_compress(ZSTD_COMPRESSOR, 3, result, result_size, &result_after_lossless);
     err = clock_gettime(CLOCK_REALTIME, &end);
@@ -48,8 +61,6 @@ int main(int argc, char ** argv){
     verify(V, dec_V, num_elements);
     verify(W, dec_W, num_elements);
 
-    // transpose_2d(dec_U, r1, r2);
-    // transpose_2d(dec_V, r1, r2);
     writefile((string(argv[1]) + ".out").c_str(), dec_U, num_elements);
     writefile((string(argv[2]) + ".out").c_str(), dec_V, num_elements);
     writefile((string(argv[3]) + ".out").c_str(), dec_W, num_elements);

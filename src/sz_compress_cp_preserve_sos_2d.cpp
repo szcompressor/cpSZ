@@ -388,7 +388,7 @@ sz_compress_cp_preserve_sos_2d_online_fp(const T_data * U, const T_data * V, siz
 	T range = 0;
 	T vector_field_scaling_factor = convert_to_fixed_point(U, V, num_elements, U_fp, V_fp, range);
 	printf("fixed point range = %lld\n", range);
-	int * eb_quant_index = (int *) malloc(2*num_elements*sizeof(int));
+	int * eb_quant_index = (int *) malloc(num_elements*sizeof(int));
 	int * data_quant_index = (int *) malloc(2*num_elements*sizeof(int));
 	int * eb_quant_index_pos = eb_quant_index;
 	int * data_quant_index_pos = data_quant_index;
@@ -571,7 +571,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 	T range = 0;
 	T vector_field_scaling_factor = convert_to_fixed_point(U, V, num_elements, U_fp, V_fp, range);
 	printf("fixed point range = %lld\n", range);
-	int * eb_quant_index = (int *) malloc(2*num_elements*sizeof(int));
+	int * eb_quant_index = (int *) malloc(num_elements*sizeof(int));
 	int * data_quant_index = (int *) malloc(2*num_elements*sizeof(int));
 	int * eb_quant_index_pos = eb_quant_index;
 	int * data_quant_index_pos = data_quant_index;
@@ -653,6 +653,10 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 				}
 			}
 			T abs_eb = required_eb;
+			// relax error bound
+			abs_eb = relax_eb(abs_eb, (T) 8);
+			abs_eb = MINF(abs_eb, max_eb);
+			*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
 			if(abs_eb > 0){
 				bool unpred_flag = false;
 				// predict U and V
@@ -670,10 +674,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 					pred[k] = d1 + d2 - d0;
 					pred_residue[k] = data_ori[k] - pred[k];
 				}
-				// relax error bound
-				abs_eb = relax_eb(abs_eb, (T) 8);
-				abs_eb = MINF(abs_eb, max_eb);
-				*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+				bool repeated = false;
 				while(true){
 					bool verification_flag = true;
 					// quantize using relaxed eb
@@ -698,9 +699,16 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_eb(const T_data * U, const T_data 
 						}					
 					}
 					if(verification_flag) break;
+					if(repeated){
+						// special case when decompressed[p] - data_ori[p] == required_eb
+						// will lead to finite loop
+						unpred_flag = true;
+						break;
+					}
 					abs_eb = restrict_eb(abs_eb);
 					if(abs_eb < required_eb){
 						abs_eb = required_eb;
+						repeated = true;
 					}
 					*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
 				}			
@@ -777,7 +785,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(const T_data * U, const T_
 	T range = 0;
 	T vector_field_scaling_factor = convert_to_fixed_point(U, V, num_elements, U_fp, V_fp, range);
 	printf("fixed point range = %lld\n", range);
-	int * eb_quant_index = (int *) malloc(2*num_elements*sizeof(int));
+	int * eb_quant_index = (int *) malloc(num_elements*sizeof(int));
 	int * data_quant_index = (int *) malloc(2*num_elements*sizeof(int));
 	int * eb_quant_index_pos = eb_quant_index;
 	int * data_quant_index_pos = data_quant_index;
@@ -998,7 +1006,7 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 	T range = 0;
 	T vector_field_scaling_factor = convert_to_fixed_point(U, V, num_elements, U_fp, V_fp, range);
 	printf("fixed point range = %lld\n", range);
-	int * eb_quant_index = (int *) malloc(2*num_elements*sizeof(int));
+	int * eb_quant_index = (int *) malloc(num_elements*sizeof(int));
 	int * data_quant_index = (int *) malloc(2*num_elements*sizeof(int));
 	int * eb_quant_index_pos = eb_quant_index;
 	int * data_quant_index_pos = data_quant_index;
