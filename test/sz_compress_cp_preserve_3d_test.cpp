@@ -33,8 +33,8 @@ int main(int argc, char ** argv){
     if(option == 0) result = sz_compress_cp_preserve_sos_3d_online_fp(U, V, W, r1, r2, r3, result_size, false, max_eb);
     else if(option == 1) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_eb(U, V, W, r1, r2, r3, result_size, false, max_eb);
     else if(option == 2) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_fn(U, V, W, r1, r2, r3, result_size, false, max_eb);
-    else if(option == 3) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_fn(U, V, W, r1, r2, r3, result_size, false, max_eb, 64);
-    else if(option == 4) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_all(U, V, W, r1, r2, r3, result_size, false, max_eb, 64);
+    else if(option == 3) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_fn(U, V, W, r1, r2, r3, result_size, false, max_eb, 8);
+    else if(option == 4) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_all(U, V, W, r1, r2, r3, result_size, false, max_eb, 8);
     else{
         std::cerr << "Option not supported\n";
         exit(0);
