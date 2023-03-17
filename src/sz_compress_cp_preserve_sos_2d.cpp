@@ -32,8 +32,16 @@ derive_cp_abs_eb_sos_online(const T u0, const T u1, const T u2, const T v0, cons
 	T eb = std::abs(M) / (std::abs(u1 - u0) + std::abs(v0 - v1));
 	{
 		// keep sign for replacing the first and second vertices
-		T cur_eb = MINF(std::abs(u1*v2 - u2*v1) / (std::abs(u1) + std::abs(v1)), std::abs(u0*v2 - u2*v0) / (std::abs(u0) + std::abs(v0)));
-		eb = MINF(eb, cur_eb);
+		if(std::abs(u1) + std::abs(v1) != 0){
+			eb = MINF(eb, std::abs(u1*v2 - u2*v1) / (std::abs(u1) + std::abs(v1)));
+		}
+		else return 0;
+		if(std::abs(u0) + std::abs(v0) != 0){
+			eb = MINF(eb, std::abs(u0*v2 - u2*v0) / (std::abs(u0) + std::abs(v0)));			
+		}
+		else return 0;
+		// T cur_eb = MINF(std::abs(u1*v2 - u2*v1) / (std::abs(u1) + std::abs(v1)), std::abs(u0*v2 - u2*v0) / (std::abs(u0) + std::abs(v0)));
+		// eb = MINF(eb, cur_eb);
 	}
 	if(same_direction(u0, u1, u2)){			
 		eb = MAX(eb, std::abs(u2));
