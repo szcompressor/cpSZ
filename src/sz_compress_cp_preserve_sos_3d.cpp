@@ -1052,6 +1052,10 @@ sz_compress_cp_preserve_sos_3d_online_fp_spec_eb(const T_data * U, const T_data 
 							repeated = true;
 						}
 						*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+						if(abs_eb == 0){
+							unpred_flag = true;
+							break;
+						}
 					}
 					if(unpred_flag){
 						*(eb_quant_index_pos ++) = 0;
