@@ -328,20 +328,19 @@ int main(int argc, char **argv)
   cp_file ? printf("Critical point file found!\n") : printf("Critical point Not found, recomputing\n");
   auto critical_points_0 = cp_file ? read_criticalpoints(cp_prefix) : compute_critical_points(u, v, w, DD, DH, DW, vector_field_scaling_factor);
 
-  // free(u);
-  // free(v);
-  // free(w);
+  free(u);
+  free(v);
+  free(w);
 
-  // fprintf(stderr, "reading decompressed data...\n");
-  // std::string fn_u = std::string(argv[1]) + ".out";
-  // std::string fn_v = std::string(argv[2]) + ".out";
-  // std::string fn_w = std::string(argv[3]) + ".out";
+  fprintf(stderr, "reading decompressed data...\n");
+  std::string fn_u = std::string(argv[1]) + ".out";
+  std::string fn_v = std::string(argv[2]) + ".out";
+  std::string fn_w = std::string(argv[3]) + ".out";
 
-  // u = readfile<float>(fn_u.c_str(), num);
-  // v = readfile<float>(fn_v.c_str(), num);
-  // w = readfile<float>(fn_w.c_str(), num);
+  u = readfile<float>(fn_u.c_str(), num);
+  v = readfile<float>(fn_v.c_str(), num);
+  w = readfile<float>(fn_w.c_str(), num);
 
-  // auto critical_points_1 = extract_critical_points(u, v, w);
   struct timespec start, end;
   int err = 0;
   err = clock_gettime(CLOCK_REALTIME, &start);
