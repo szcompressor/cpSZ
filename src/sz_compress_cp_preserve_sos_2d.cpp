@@ -140,15 +140,19 @@ check_cp_type(T_fp vf[3][2], T v[3][2], double X[3][2], int indices[3]){
 template<typename T_data, typename T_fp>
 static vector<int> 
 compute_cp_and_type(const T_fp * U_fp, const T_fp * V_fp, const T_data * U, const T_data * V, int r1, int r2){
-	// order: x then y
+	/*
+		X3	X2
+		X0	X1
+	*/
+	// order: x then y, X320 then X210
 	double X1[3][2] = {
 		{0, 0},
-		{0, 1},
+		{1, 0},
 		{1, 1}
 	};
 	double X2[3][2] = {
 		{0, 0},
-		{1, 0},
+		{0, 1},
 		{1, 1}
 	};
 	vector<int> cp_type(2*(r1-1)*(r2-1), -1);
