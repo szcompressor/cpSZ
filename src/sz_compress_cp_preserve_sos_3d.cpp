@@ -1360,6 +1360,13 @@ sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_all(const T_data * U, const T
 	T * cur_U_pos = U_fp;
 	T * cur_V_pos = V_fp;
 	T * cur_W_pos = W_fp;
+	// dec_data
+	T_data * dec_U = (T_data *) malloc(num_elements*sizeof(T_data));
+	T_data * dec_V = (T_data *) malloc(num_elements*sizeof(T_data));
+	T_data * dec_W = (T_data *) malloc(num_elements*sizeof(T_data));
+	memcpy(dec_U, U, num_elements*sizeof(T_data));
+	memcpy(dec_V, V, num_elements*sizeof(T_data));
+	memcpy(dec_W, W, num_elements*sizeof(T_data));
 	T threshold = 1;
 	// check cp for all cells
 	std::cout << "start cp checking\n";
@@ -1436,10 +1443,15 @@ sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_all(const T_data * U, const T
 							}
 							vf[3][0] = decompressed[0], vf[3][1] = decompressed[1], vf[3][2] = decompressed[2];
 							double v[4][3];
-							for(int i=0; i<4; i++){
-								for(int j=0; j<3; j++){
-									v[i][j] = convert_fp_to_float<T_data>(vf[i][j], vector_field_scaling_factor);
-								}
+							// use decompressed/original data for other vertices
+							for(int p=0; p<3; p++){
+								v[p][0] = dec_U[indices[p]];
+								v[p][1] = dec_V[indices[p]];
+								v[p][2] = dec_W[indices[p]];
+							}
+							// compute decompressed data for current vertex
+							for(int p=0; p<3; p++){
+								v[3][p] = convert_fp_to_float<T_data>(decompressed[p], vector_field_scaling_factor);
 							}
 							int decompressed_cp_type = check_cp_type(vf, v, coordinates_d[n], indices);
 							int cell_index = simplex_offset[n] + 6*(i*cell_dim0_offset + j*cell_dim1_offset + k);
@@ -1456,9 +1468,9 @@ sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_all(const T_data * U, const T
 						verification_flag = true;					
 					}
 				}
+				ptrdiff_t offset = cur_U_pos - U_fp;
 				if(unpred_flag){
 					*(eb_quant_index_pos ++) = 0;
-					ptrdiff_t offset = cur_U_pos - U_fp;
 					unpred_data.push_back(U[offset]);
 					unpred_data.push_back(V[offset]);
 					unpred_data.push_back(W[offset]);
@@ -1469,11 +1481,17 @@ sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_all(const T_data * U, const T
 					*cur_U_pos = decompressed[0];
 					*cur_V_pos = decompressed[1];
 					*cur_W_pos = decompressed[2];
+					dec_U[offset] = convert_fp_to_float<T_data>(decompressed[0], vector_field_scaling_factor);
+					dec_V[offset] = convert_fp_to_float<T_data>(decompressed[1], vector_field_scaling_factor);
+					dec_W[offset] = convert_fp_to_float<T_data>(decompressed[2], vector_field_scaling_factor);
 				}
 				cur_U_pos ++, cur_V_pos ++, cur_W_pos ++;
 			}
 		}
 	}
+	free(dec_U);
+	free(dec_V);
+	free(dec_W);
 	free(U_fp);
 	free(V_fp);
 	free(W_fp);

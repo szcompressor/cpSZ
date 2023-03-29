@@ -1071,6 +1071,11 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 	};
 	T * U_pos = U_fp;
 	T * V_pos = V_fp;
+	// dec_data
+	T_data * dec_U = (T_data *) malloc(num_elements*sizeof(T_data));
+	T_data * dec_V = (T_data *) malloc(num_elements*sizeof(T_data));
+	memcpy(dec_U, U, num_elements*sizeof(T_data));
+	memcpy(dec_V, V, num_elements*sizeof(T_data));
 	T threshold = 1;
 	// conditions_2d cond;
 	// check cp and type for all cells
@@ -1143,10 +1148,14 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 						X[1][0] = x[k][1], X[1][1] = y[k][1];
 						X[2][0] = x[k][2], X[2][1] = y[k][2];
 						T_data v[3][2];
-						for(int i=0; i<3; i++){
-							for(int j=0; j<2; j++){
-								v[i][j] = convert_fp_to_float<T_data>(vf[i][j], vector_field_scaling_factor);
-							}
+						// use decompressed/original data for other vertices
+						for(int p=0; p<2; p++){
+							v[p][0] = dec_U[indices[p]];
+							v[p][1] = dec_V[indices[p]];
+						}
+						// compute decompressed data for current vertex
+						for(int p=0; p<2; p++){
+							v[2][p] = convert_fp_to_float<T_data>(decompressed[p], vector_field_scaling_factor);
 						}
 						int decompressed_cp_type = check_cp_type(vf, v, X, indices);
 						if(decompressed_cp_type != cp_type[2*(i*(r2-1) + j) + cell_offset[k]]){
@@ -1162,10 +1171,10 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 					verification_flag = true;					
 				}
 			}
+			ptrdiff_t offset = cur_U_pos - U_fp;
 			if(unpred_flag){
 				// recover quant index
 				*(eb_quant_index_pos ++) = 0;
-				ptrdiff_t offset = cur_U_pos - U_fp;
 				unpred_data.push_back(U[offset]);
 				unpred_data.push_back(V[offset]);
 			}
@@ -1175,6 +1184,8 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 				// assign decompressed data
 				*cur_U_pos = decompressed[0];
 				*cur_V_pos = decompressed[1];
+				dec_U[offset] = convert_fp_to_float<T_data>(decompressed[0], vector_field_scaling_factor);
+				dec_V[offset] = convert_fp_to_float<T_data>(decompressed[1], vector_field_scaling_factor);
 			}
 			cur_U_pos ++, cur_V_pos ++;
 		}
