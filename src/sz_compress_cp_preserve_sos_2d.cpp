@@ -147,12 +147,12 @@ compute_cp_and_type(const T_fp * U_fp, const T_fp * V_fp, const T_data * U, cons
 	// order: x then y, X320 then X210
 	double X1[3][2] = {
 		{0, 0},
-		{1, 0},
+		{0, 1},
 		{1, 1}
 	};
 	double X2[3][2] = {
 		{0, 0},
-		{0, 1},
+		{1, 0},
 		{1, 1}
 	};
 	vector<int> cp_type(2*(r1-1)*(r2-1), -1);
@@ -1006,6 +1006,7 @@ template<typename T_data, typename T_fp>
 static inline T_data convert_fp_to_float(T_fp fp, T_fp vector_field_scaling_factor){
 	return fp * (T_data) 1.0 / vector_field_scaling_factor;
 }
+
 // variation with speculative compression on cp detection
 // execute both fn and fp
 template<typename T_data>
@@ -1137,16 +1138,17 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 							indices[p] = (i + index_offset[k][p][1])*r2 + (j + index_offset[k][p][0]);
 						}
 						indices[2] = i*r2 + j;
-						T vf[3][2];
-						for(int p=0; p<3; p++){
-							vf[p][0] = U_fp[indices[p]];
-							vf[p][1] = V_fp[indices[p]];
-						}
-						vf[2][0] = decompressed[0], vf[2][1] = decompressed[1];
 						double X[3][2];
 						X[0][0] = x[k][0], X[0][1] = y[k][0];
 						X[1][0] = x[k][1], X[1][1] = y[k][1];
 						X[2][0] = x[k][2], X[2][1] = y[k][2];
+						// get vf and v
+						T vf[3][2];
+						for(int p=0; p<2; p++){
+							vf[p][0] = U_fp[indices[p]];
+							vf[p][1] = V_fp[indices[p]];
+						}
+						vf[2][0] = decompressed[0], vf[2][1] = decompressed[1];
 						T_data v[3][2];
 						// use decompressed/original data for other vertices
 						for(int p=0; p<2; p++){
@@ -1156,6 +1158,25 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 						// compute decompressed data for current vertex
 						for(int p=0; p<2; p++){
 							v[2][p] = convert_fp_to_float<T_data>(decompressed[p], vector_field_scaling_factor);
+						}
+						// sort indices
+						for(int p=0; p<3; p++){
+							int min_ind = p;
+							for(int q=p+1; q<3; q++){
+								if(indices[q] < indices[min_ind]){
+									min_ind = q;
+								}
+							}
+							if(min_ind != p){
+								// swap indices and X, v, vf
+								std::swap(indices[p], indices[min_ind]);
+								std::swap(X[p][0], X[min_ind][0]);
+								std::swap(X[p][1], X[min_ind][1]);
+								std::swap(v[p][0], v[min_ind][0]);
+								std::swap(v[p][1], v[min_ind][1]);
+								std::swap(vf[p][0], vf[min_ind][0]);
+								std::swap(vf[p][1], vf[min_ind][1]);
+							}
 						}
 						int decompressed_cp_type = check_cp_type(vf, v, X, indices);
 						if(decompressed_cp_type != cp_type[2*(i*(r2-1) + j) + cell_offset[k]]){

@@ -321,8 +321,8 @@ int main(int argc, char **argv)
   << ", factor=" << vector_field_scaling_factor 
   << ", nbits=" << nbits << ", vbits=" << vbits << ", shift_bits=" << nbits - vbits << std::endl;
 
-  std::string cp_prefix = "origin_M_" + std::to_string(nbits - vbits) + "_bits";
-  if(sos) cp_prefix += "_sos";
+  std::string cp_prefix = "origin_" + std::to_string(nbits - vbits) + "_bits";
+  if(sos) cp_prefix += "_sos_M";
   bool cp_file = file_exists(cp_prefix + "_sid.dat");
   // cp_file = false;
   cp_file ? printf("Critical point file found!\n") : printf("Critical point Not found, recomputing\n");
@@ -401,12 +401,12 @@ int main(int argc, char **argv)
   std::cout << "FN = " << fn.size() << std::endl;
   std::cout << "FT = " << ft.size() << std::endl;
   // {
-  if(!cp_file) record_criticalpoints(cp_prefix, origin, true);    
-  //   std::string prefix = std::string(argv[7]);
-  //   record_criticalpoints(prefix+"_M", m);    
-  //   record_criticalpoints(prefix+"_FP", fp);    
-  //   record_criticalpoints(prefix+"_FN", fn);    
-  //   record_criticalpoints(prefix+"_FT", ft);    
+  // if(!cp_file) record_criticalpoints(cp_prefix, origin, true);    
+  // std::string prefix = std::string(argv[7]);
+  // if(m.size()) record_criticalpoints(prefix+"_M", m);    
+  // if(fp.size()) record_criticalpoints(prefix+"_FP", fp);    
+  // if(fn.size()) record_criticalpoints(prefix+"_FN", fn);    
+  // if(ft.size()) record_criticalpoints(prefix+"_FT", ft);    
   // }
   free(u);
   free(v);

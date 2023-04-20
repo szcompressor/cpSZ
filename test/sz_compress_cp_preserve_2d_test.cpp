@@ -31,6 +31,8 @@ int main(int argc, char ** argv){
     else if(option == 2) result = sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(U, V, r1, r2, result_size, false, max_eb);
     else if(option == 3) result = sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(U, V, r1, r2, result_size, false, max_eb, 8);
     else if(option == 4) result = sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(U, V, r1, r2, result_size, false, max_eb, 8);
+    else if(option == 5) result = sz_compress_cp_preserve_2d_offline_log(U, V, r1, r2, result_size, false, max_eb);
+    else if(option == 6) result = sz_compress_cp_preserve_2d_online_log(U, V, r1, r2, result_size, false, max_eb);
     else{
         std::cerr << "Option not supported\n";
         exit(0);
@@ -50,7 +52,13 @@ int main(int argc, char ** argv){
     // sz_decompress_cp_preserve_2d_offline_log<float>(result, r1, r2, dec_U, dec_V);
     // sz_decompress_cp_preserve_2d_online<float>(result, r1, r2, dec_U, dec_V);
     // sz_decompress_cp_preserve_2d_online_log<float>(result, r1, r2, dec_U, dec_V);
-    sz_decompress_cp_preserve_2d_online_fp<float>(result, r1, r2, dec_U, dec_V);
+    if(option == 5){
+        sz_decompress_cp_preserve_2d_offline_log<float>(result, r1, r2, dec_U, dec_V);
+    }
+    else if(option == 6){
+        sz_decompress_cp_preserve_2d_online_log<float>(result, r1, r2, dec_U, dec_V);
+    }
+    else sz_decompress_cp_preserve_2d_online_fp<float>(result, r1, r2, dec_U, dec_V);
     err = clock_gettime(CLOCK_REALTIME, &end);
     cout << "Decompression time: " << (double)(end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec)/(double)1000000000 << "s" << endl;
     free(result_after_lossless);

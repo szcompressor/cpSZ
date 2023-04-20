@@ -1,30 +1,17 @@
-#include <mutex>
 #include <ftk/numeric/print.hh>
 #include <ftk/numeric/cross_product.hh>
 #include <ftk/numeric/vector_norm.hh>
 #include <ftk/numeric/linear_interpolation.hh>
-#include <ftk/numeric/bilinear_interpolation.hh>
 #include <ftk/numeric/inverse_linear_interpolation_solver.hh>
 #include <ftk/numeric/inverse_bilinear_interpolation_solver.hh>
 #include <ftk/numeric/gradient.hh>
-#include <ftk/algorithms/cca.hh>
-#include <ftk/geometry/cc2curves.hh>
-#include <ftk/geometry/curve2tube.hh>
-#include <ftk/ndarray.hh>
-#include <ftk/mesh/simplicial_regular_mesh.hh>
 #include <ftk/numeric/critical_point_type.hh>
 #include <ftk/numeric/critical_point_test.hh>
+#include <ftk/numeric/clamp.hh>
 #include <unordered_map>
 #include <vector>
 #include <queue>
 #include <fstream>
-
-uint64_t vector_field_scaling_factor = 1;
-int DW = 128, DH = 128;// the dimensionality of the data is DW*DH
-
-ftk::ndarray<float> grad;
-ftk::simplicial_regular_mesh m(2); // the 2D spatial mesh
-std::mutex mutex;
 
 struct critical_point_t {
   double mu[3]; // interpolation coefficients
@@ -72,56 +59,18 @@ std::string get_critical_point_type_string(int type){
   }
 }
 
-bool check_simplex(const ftk::simplicial_regular_mesh_element& s)
-{
-  if (!s.valid(m)) return false; // check if the 3-simplex is valid
-  const auto &vertices = s.vertices(m);
-  // simplex_vectors(vertices, v);
-  double X[3][2], v[3][2];
-  for (int i = 0; i < 3; i ++) {
-    for (int j = 0; j < 2; j ++)
-      v[i][j] = grad(j, vertices[i][0], vertices[i][1]);
-    for (int j = 0; j < 2; j ++)
-      X[i][j] = vertices[i][j];
-  }
-
-#if FTK_HAVE_GMP
-  typedef mpf_class fp_t;
-  fp_t vf[3][2];
-  for (int i = 0; i < 3; i ++)
-    for (int j = 0; j < 2; j ++) {
-      const double x = v[i][j];
-      if (std::isnan(x) || std::isinf(x)) return false;
-      else vf[i][j] = v[i][j];
-    }
-#else
-  int64_t vf[3][2];
-  for (int i = 0; i < 3; i ++)
-    for (int j = 0; j < 2; j ++) {
-      const double x = v[i][j];
-      if (std::isnan(x) || std::isinf(x)) return false;
-      else vf[i][j] = v[i][j] * vector_field_scaling_factor;
-    }
-#endif
-
+template<typename T_fp>
+static void 
+check_simplex_seq(const T_fp vf[3][2], const double v[3][2], const double X[3][2], const int indices[3], int i, int j, int simplex_id, std::unordered_map<int, critical_point_t>& critical_points){
   // robust critical point test
-  int indices[3];
-  for (int i = 0; i < vertices.size(); i ++)
-    indices[i] = m.get_lattice().to_integer(vertices[i]);
   bool succ = ftk::robust_critical_point_in_simplex2(vf, indices);
-  if (!succ) return false;
-
+  if (!succ) return;
   double mu[3]; // check intersection
   double cond;
   bool succ2 = ftk::inverse_lerp_s2v2(v, mu, &cond);
-  // if (!succ2) return false;
-  // if (std::isnan(mu[0]) || std::isnan(mu[1]) || std::isnan(mu[2])) return false;
-  // fprintf(stderr, "mu=%f, %f, %f\n", mu[0], mu[1], mu[2]);
   if (!succ2) ftk::clamp_barycentric<3>(mu);
   double x[2]; // position
-  // simplex_coordinates(vertices, X);
   ftk::lerp_s2v2(X, mu, x);
-  // fprintf(stdout, "simplex_id=%d, corner=%d, %d, type=%d, mu=%f, %f, %f, x=%f, %f\n", s.to_integer(), s.corner[0], s.corner[1], s.type, mu[0], mu[1], mu[2], x[0], x[1]);
   double J[2][2]; // jacobian
   ftk::jacobian_2dsimplex2(X, v, J);  
   int cp_type = 0;
@@ -146,37 +95,66 @@ bool check_simplex(const ftk::simplicial_regular_mesh_element& s)
     } else 
       cp_type = CENTER;
   }
-  critical_point_t cp(mu, x, 0, cp_type);
-  cp.simplex_id = s.to_integer(m);
-  {
-    std::lock_guard<std::mutex> guard(mutex);
-    critical_points.insert(std::make_pair(s.to_integer(m), cp));
+  critical_point_t cp;
+  cp.x[0] = j + x[0]; cp.x[1] = i + x[1];
+  cp.simplex_id = simplex_id;
+  cp.type = cp_type;
+  critical_points[simplex_id] = cp;
+}
+
+template<typename T>
+std::unordered_map<int, critical_point_t>
+compute_critical_points(const T * U, const T * V, int r1, int r2, uint64_t vector_field_scaling_factor){
+  // check cp for all cells
+  using T_fp = int64_t;
+  size_t num_elements = r1*r2;
+  T_fp * U_fp = (T_fp *) malloc(num_elements * sizeof(T_fp));
+  T_fp * V_fp = (T_fp *) malloc(num_elements * sizeof(T_fp));
+  for(int i=0; i<num_elements; i++){
+    U_fp[i] = U[i]*vector_field_scaling_factor;
+    V_fp[i] = V[i]*vector_field_scaling_factor;
   }
-  return true;
-}
-
-void extract_critical_points()
-{
-  fprintf(stderr, "extracting critical points...\n");
-  m.set_lb_ub({1, 1}, {DW-2, DH-2}); // set the lower and upper bounds of the mesh
-  m.element_for(2, check_simplex); // iterate over all 3-simplices
-}
-
-void refill_gradient(int id, const float* grad_tmp){
-  const float * grad_tmp_pos = grad_tmp;
-  for (int i = 0; i < DH; i ++) {
-    for (int j = 0; j < DW; j ++) {
-      grad(id, j, i) = *(grad_tmp_pos ++);
+  int indices[3] = {0};
+  // __int128 vf[4][3] = {0};
+  double X1[3][2] = {
+    {0, 0},
+    {0, 1},
+    {1, 1}
+  };
+  double X2[3][2] = {
+    {0, 0},
+    {1, 0},
+    {1, 1}
+  };
+  int64_t vf[3][2] = {0};
+  double v[3][2] = {0};
+  std::unordered_map<int, critical_point_t> critical_points;
+  for(int i=1; i<r1-2; i++){
+    if(i%100==0) std::cout << i << " / " << r1-1 << std::endl;
+    for(int j=1; j<r2-2; j++){
+      ptrdiff_t cell_offset = 2*(i * (r2-1) + j);
+      // ptrdiff_t cell_offset = 2*(i * r2 + j);
+      indices[0] = i*r2 + j;
+      indices[1] = (i+1)*r2 + j;
+      indices[2] = (i+1)*r2 + (j+1); 
+      // cell index 0
+      for(int p=0; p<3; p++){
+        vf[p][0] = U_fp[indices[p]];
+        vf[p][1] = V_fp[indices[p]];
+        v[p][0] = U[indices[p]];
+        v[p][1] = V[indices[p]];
+      }
+      check_simplex_seq(vf, v, X1, indices, i, j, cell_offset, critical_points);
+      // cell index 1
+      indices[1] = i*r2 + (j+1);
+      vf[1][0] = U_fp[indices[1]], vf[1][1] = V_fp[indices[1]];
+      v[1][0] = U[indices[1]], v[1][1] = V[indices[1]];     
+      check_simplex_seq(vf, v, X2, indices, i, j, cell_offset + 1, critical_points);
     }
   }
-}
-
-std::unordered_map<int, critical_point_t> get_critical_points(){
-  critical_points.clear();
-  // derive_gradients();
-  extract_critical_points();
-  std::unordered_map<int, critical_point_t> result(critical_points);
-  return result;
+  free(U_fp);
+  free(V_fp);
+  return critical_points; 
 }
 
 template<typename Type>
@@ -270,16 +248,14 @@ int main(int argc, char **argv){
   size_t num = 0;
   float * u = readfile<float>(argv[1], num);
   float * v = readfile<float>(argv[2], num);
-  DW = atoi(argv[3]);
-  DH = atoi(argv[4]);
+  int DW = atoi(argv[3]);
+  int DH = atoi(argv[4]);
+  int sos = 1;
 
-  grad.reshape({2, static_cast<unsigned long>(DW), static_cast<unsigned long>(DH)});
-  refill_gradient(0, u);
-  refill_gradient(1, v);
   // compute vector_field_resolution
   const int type_bits = 63;
   double vector_field_resolution = 0;
-  vector_field_scaling_factor = 1;
+  uint64_t vector_field_scaling_factor = 1;
   for (int i=0; i<num; i++){
     double min_val = std::max(fabs(u[i]), fabs(v[i]));
     vector_field_resolution = std::max(vector_field_resolution, min_val);
@@ -291,31 +267,34 @@ int main(int argc, char **argv){
   << ", factor=" << vector_field_scaling_factor 
   << ", nbits=" << nbits << ", vbits=" << vbits << ", shift_bits=" << nbits - vbits << std::endl;
 
+  std::string cp_prefix = "origin_" + std::to_string(nbits - vbits) + "_bits";
+  if(sos) cp_prefix += "_sos_M";
+  bool cp_file = false;// file_exists(cp_prefix + "_sid.dat");
+  cp_file ? printf("Critical point file found!\n") : printf("Critical point Not found, recomputing\n");
+  auto critical_points_0 = cp_file ? read_criticalpoints(cp_prefix) : compute_critical_points(u, v, DH, DW, vector_field_scaling_factor);
+
   free(u);
   free(v);
 
-  // auto critical_points_0 = get_critical_points();
-  std::string cp_prefix = "origin_M_" + std::to_string(nbits - vbits) + "_bits";
-  cp_prefix += "_sos";
-  bool cp_file = file_exists(cp_prefix + "_sid.dat");
-  cp_file ? printf("Critical point file found!\n") : printf("Critical point Not found, recomputing\n");
-  auto critical_points_0 = cp_file ? read_criticalpoints(cp_prefix) : get_critical_points();
-  std::cout << "critical_points number = " << critical_points_0.size() << std::endl;
-  {
-    std::cout << "read decompressed data\n";
-    std::string fn_u = std::string(argv[1]) + ".out";
-    std::string fn_v = std::string(argv[2]) + ".out";
-    u = readfile<float>(fn_u.c_str(), num);
-    v = readfile<float>(fn_v.c_str(), num);
-    std::cout << "read " << num << " decompressed data done\n";
-  }
-  refill_gradient(0, u);
-  refill_gradient(1, v);
+  std::cout << "read decompressed data\n";
+  std::string fn_u = std::string(argv[1]) + ".out";
+  std::string fn_v = std::string(argv[2]) + ".out";
+  u = readfile<float>(fn_u.c_str(), num);
+  v = readfile<float>(fn_v.c_str(), num);
+  std::cout << "read " << num << " decompressed data done\n";
+
+  struct timespec start, end;
+  int err = 0;
+  err = clock_gettime(CLOCK_REALTIME, &start);
+  auto critical_points_1 = compute_critical_points(u, v, DH, DW, vector_field_scaling_factor);
+  err = clock_gettime(CLOCK_REALTIME, &end);
+  std::cout << "extraction time: " << (double)(end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec)/(double)1000000000 << "s" << std::endl;
+  fprintf(stderr, "#critical_points = %lu\n", critical_points_0.size());
+  fprintf(stderr, "#decompressed_critical_points = %lu\n", critical_points_1.size());
+
   free(u);
   free(v);
-  std::cout << "refill gradients done\n";
-  auto critical_points_1 = get_critical_points();
-  std::cout << "decompressed critical_points number = " << critical_points_1.size() << std::endl;
+
   int matches = 0;
   std::vector<critical_point_t> fp, fn, ft, m;
   std::vector<critical_point_t> origin;
@@ -327,9 +306,9 @@ int main(int argc, char **argv){
       // matches ++;
       auto cp_1 = critical_points_1[p.first];
       if(cp.type != cp_1.type){
-        // std::cout << "Change from " << get_critical_point_type_string(cp.type)
-        //   << " to " << get_critical_point_type_string(cp_1.type) <<
-        //    ", positions from " << cp.x[0] << ", " << cp.x[1] << " to " << cp_1.x[0] << ", " << cp_1.x[1] << std::endl;
+        std::cout << "Simplex " << cp.simplex_id << " Change from " << get_critical_point_type_string(cp.type)
+          << " to " << get_critical_point_type_string(cp_1.type) <<
+           ", positions from " << cp.x[0] << ", " << cp.x[1] << " to " << cp_1.x[0] << ", " << cp_1.x[1] << std::endl;
         // cp_type_change ++;
         ft.push_back(cp_1);
       }
@@ -359,14 +338,17 @@ int main(int argc, char **argv){
   std::cout << "FP = " << fp.size() << std::endl;
   std::cout << "FN = " << fn.size() << std::endl;
   std::cout << "FT = " << ft.size() << std::endl;
-  record_criticalpoints(cp_prefix, origin, true);    
-  // if(!cp_file) {
-  //   record_criticalpoints(std::string("origin_M"), origin, true);
-  //   std::string prefix = std::string(argv[5]);
-  //   record_criticalpoints(prefix+"_M", m, false);    
-  //   record_criticalpoints(prefix+"_FP", fp, false);    
-  //   record_criticalpoints(prefix+"_FN", fn, false);    
-  //   record_criticalpoints(prefix+"_FT", ft, false);    
+  std::cout << "********* "<< std::endl;
+
+  // record_criticalpoints(cp_prefix, origin, true);  
+
+  // {
+  // if(!cp_file) record_criticalpoints(std::string("origin_M"), origin, true);
+  // std::string prefix = std::string(argv[5]);
+  // if(m.size()) record_criticalpoints(prefix+"_M", m);    
+  // if(fp.size()) record_criticalpoints(prefix+"_FP", fp);    
+  // if(fn.size()) record_criticalpoints(prefix+"_FN", fn);    
+  // if(ft.size()) record_criticalpoints(prefix+"_FT", ft);    
   // }
   return 0;
 }

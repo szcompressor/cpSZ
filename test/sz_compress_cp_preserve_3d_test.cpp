@@ -35,6 +35,8 @@ int main(int argc, char ** argv){
     else if(option == 2) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_fn(U, V, W, r1, r2, r3, result_size, false, max_eb);
     else if(option == 3) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_fn(U, V, W, r1, r2, r3, result_size, false, max_eb, 8);
     else if(option == 4) result = sz_compress_cp_preserve_sos_3d_online_fp_spec_exec_all(U, V, W, r1, r2, r3, result_size, false, max_eb, 8);
+    else if(option == 5) result = sz_compress_cp_preserve_3d_offline_log(U, V, W, r1, r2, r3, result_size, false, max_eb);
+    else if(option == 6) result = sz_compress_cp_preserve_3d_online_log(U, V, W, r1, r2, r3, result_size, false, max_eb);
     else{
         std::cerr << "Option not supported\n";
         exit(0);
@@ -52,7 +54,8 @@ int main(int argc, char ** argv){
     float * dec_V = NULL;
     float * dec_W = NULL;
     // sz_decompress_cp_preserve_3d_online_log<float>(result, r1, r2, r3, dec_U, dec_V, dec_W);
-    sz_decompress_cp_preserve_3d_online_fp<float>(result, r1, r2, r3, dec_U, dec_V, dec_W);
+    if(option >= 5) sz_decompress_cp_preserve_3d_online_log<float>(result, r1, r2, r3, dec_U, dec_V, dec_W);
+    else sz_decompress_cp_preserve_3d_online_fp<float>(result, r1, r2, r3, dec_U, dec_V, dec_W);
     err = clock_gettime(CLOCK_REALTIME, &end);
     cout << "Decompression time: " << (double)(end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec)/(double)1000000000 << "s" << endl;
     free(result_after_lossless);
