@@ -28,6 +28,9 @@ target_link_libraries (cp_extraction_2d_sos FTK::libftk)
 add_executable (cp_extraction_3d_sos cp_extraction_3d_sos.cpp)
 target_link_libraries (cp_extraction_3d_sos FTK::libftk)
 
+add_executable (cp_extraction_3d_unstructured cp_extraction_3d_unstructured.cpp)
+target_link_libraries (cp_extraction_3d_unstructured FTK::libftk)
+
 install (TARGETS sz_compress_cp_preserve_2d_test sz_compress_cp_preserve_3d_test sz_compress_cp_preserve_3d_unstructured_test sz_compress_2d_with_eb
   RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
 )
