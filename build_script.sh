@@ -4,10 +4,9 @@ src_dir=`pwd`
 # build FTK for evaluation and speculative compression
 mkdir -p ${src_dir}/external
 cd ${src_dir}/external
-git clone https://github.com/lxAltria/ftk.git
+git clone https://github.com/hguo/ftk.git
 cd ftk
-git checkout eval-cpSZ
-git reset --hard 78c1e80aa71b52f852eacfdbcea44129e62f3641 
+#git reset --hard 5af454b9471c0f617d3d170446b42051c0d0a4d6
 mkdir install
 mkdir build
 cd build
