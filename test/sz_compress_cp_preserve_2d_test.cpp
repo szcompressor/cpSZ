@@ -20,8 +20,11 @@ int main(int argc, char ** argv){
     // unsigned char * result = sz_compress_cp_preserve_2d_offline(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_offline_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online(U, V, r1, r2, result_size, false, max_eb);
-    unsigned char * result = sz_compress_cp_preserve_2d_bilinear_online_log(U, V, r1, r2, result_size, false, max_eb);
+    unsigned char * result = sz_compress_cp_preserve_2d_online_abs(U, V, r1, r2, result_size, false, max_eb);
+    // unsigned char * result = sz_compress_cp_preserve_2d_online_abs_relax_FN(U, V, r1, r2, result_size, false, max_eb);
+    // unsigned char * result = sz_compress_cp_preserve_2d_bilinear_online_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_log(U, V, r1, r2, result_size, false, max_eb);
+    // unsigned char * result = sz3_compress_cp_preserve_2d_online_log(U, V, r1, r2, result_size, false, max_eb);
     unsigned char * result_after_lossless = NULL;
     size_t lossless_outsize = sz_lossless_compress(ZSTD_COMPRESSOR, 3, result, result_size, &result_after_lossless);
     err = clock_gettime(CLOCK_REALTIME, &end);
@@ -35,8 +38,8 @@ int main(int argc, char ** argv){
     float * dec_V = NULL;
     // sz_decompress_cp_preserve_2d_offline<float>(result, r1, r2, dec_U, dec_V);
     // sz_decompress_cp_preserve_2d_offline_log<float>(result, r1, r2, dec_U, dec_V);
-    // sz_decompress_cp_preserve_2d_online<float>(result, r1, r2, dec_U, dec_V);
-    sz_decompress_cp_preserve_2d_online_log<float>(result, r1, r2, dec_U, dec_V);
+    sz_decompress_cp_preserve_2d_online<float>(result, r1, r2, dec_U, dec_V);
+    // sz_decompress_cp_preserve_2d_online_log<float>(result, r1, r2, dec_U, dec_V);
     err = clock_gettime(CLOCK_REALTIME, &end);
     cout << "Decompression time: " << (double)(end.tv_sec - start.tv_sec) + (double)(end.tv_nsec - start.tv_nsec)/(double)1000000000 << "s" << endl;
     free(result_after_lossless);
