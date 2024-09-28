@@ -8,6 +8,8 @@ set (CMAKE_CXX_FLAGS "-g -O2")
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
 find_package(zstd REQUIRED)
+find_package(FTK REQUIRED HINTS "${CMAKE_CURRENT_SOURCE_DIR}/external/ftk/install/lib/cmake/FTK")
+
 add_subdirectory (src)
 add_subdirectory (test)
 
