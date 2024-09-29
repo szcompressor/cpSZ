@@ -20,8 +20,8 @@ int main(int argc, char ** argv){
     // unsigned char * result = sz_compress_cp_preserve_2d_offline(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_offline_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online(U, V, r1, r2, result_size, false, max_eb);
-    unsigned char * result = sz_compress_cp_preserve_2d_online_abs(U, V, r1, r2, result_size, false, max_eb);
-    // unsigned char * result = sz_compress_cp_preserve_2d_online_abs_relax_FN(U, V, r1, r2, result_size, false, max_eb);
+    // unsigned char * result = sz_compress_cp_preserve_2d_online_abs(U, V, r1, r2, result_size, false, max_eb);
+    unsigned char * result = sz_compress_cp_preserve_2d_online_abs_relax_FN(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_bilinear_online_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz_compress_cp_preserve_2d_online_log(U, V, r1, r2, result_size, false, max_eb);
     // unsigned char * result = sz3_compress_cp_preserve_2d_online_log(U, V, r1, r2, result_size, false, max_eb);

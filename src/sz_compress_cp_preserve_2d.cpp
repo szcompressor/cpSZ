@@ -1468,10 +1468,10 @@ sz_compress_cp_preserve_2d_online_abs_relax_FN(const T * U, const T * V, size_t 
 						T vf[3][2];
 						vf[0][0] = cur_U_pos[offsets[k]];
 						vf[1][0] = cur_U_pos[offsets[k+1]];
-						vf[2][0] = cur_U_pos[0];
+						vf[2][0] = decompressed[0];
 						vf[0][1] = cur_V_pos[offsets[k]];
 						vf[1][1] = cur_V_pos[offsets[k+1]];
-						vf[2][1] = cur_V_pos[0];
+						vf[2][1] = decompressed[1];
 						bool decompressed_has_cp = (check_cp(vf) == 1);
 						if(decompressed_has_cp){
 							verification_flag = false;
