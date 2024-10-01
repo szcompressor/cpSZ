@@ -3,6 +3,7 @@
 #include "sz_decompress_block_processing.hpp"
 #include <limits>
 #include <unordered_set>
+#include "sz3_utils.hpp"
 
 template<typename T>
 void
@@ -257,3 +258,120 @@ sz_decompress_cp_preserve_2d_online_log<float>(const unsigned char * compressed,
 template
 void
 sz_decompress_cp_preserve_2d_online_log<double>(const unsigned char * compressed, size_t r1, size_t r2, double *& U, double *& V);
+
+template <class T>
+void recover(T * U_pos, T * V_pos, size_t n, int * quantization, int& quant_count, size_t stride, VariableEBLinearQuantizer<T, T>& quantizer, int *& eb_quant_index_pos, int base, double threshold){
+	if(n <= 1){
+		return;
+	}
+	if(n < 5){
+		// all linear
+        for (size_t i = 1; i + 1 < n; i += 2) {
+            T *dU = U_pos + i * stride;
+            T *dV = V_pos + i * stride;
+			double eb = pow(base, *eb_quant_index_pos ++) * threshold;
+            *dU = quantizer.recover(interp_linear(*(dU - stride), *(dU + stride)), quantization[quant_count ++], eb);
+            *dV = quantizer.recover(interp_linear(*(dV - stride), *(dV + stride)), quantization[quant_count ++], eb);
+        }
+        if (n % 2 == 0) {
+            T *dU = U_pos + (n - 1) * stride;
+            T *dV = V_pos + (n - 1) * stride;
+			double eb = pow(base, *eb_quant_index_pos ++) * threshold;
+            *dU = quantizer.recover(*(dU - stride), quantization[quant_count ++], eb);
+            *dV = quantizer.recover(*(dV - stride), quantization[quant_count ++], eb);
+        }
+
+	}
+	else{
+		// cubic
+	    size_t stride3x = 3 * stride;
+	    size_t stride5x = 5 * stride;
+
+        T *dU = U_pos + stride;
+        T *dV = V_pos + stride;
+		double eb = pow(base, *eb_quant_index_pos ++) * threshold;
+        *dU = quantizer.recover(interp_quad_1(*(dU - stride), *(dU + stride), *(dU + stride3x)), quantization[quant_count ++], eb);
+        *dV = quantizer.recover(interp_quad_1(*(dV - stride), *(dV + stride), *(dV + stride3x)), quantization[quant_count ++], eb);
+
+        size_t i;
+        for (i = 3; i + 3 < n; i += 2) {
+            dU = U_pos + i * stride;
+            dV = V_pos + i * stride;
+            eb = pow(base, *eb_quant_index_pos ++) * threshold;
+            *dU = quantizer.recover(interp_cubic(*(dU - stride3x), *(dU - stride), *(dU + stride), *(dU + stride3x)), quantization[quant_count ++], eb);
+            *dV = quantizer.recover(interp_cubic(*(dV - stride3x), *(dV - stride), *(dV + stride), *(dV + stride3x)), quantization[quant_count ++], eb);
+        }
+
+        dU = U_pos + i * stride;
+        dV = V_pos + i * stride;
+        eb = pow(base, *eb_quant_index_pos ++) * threshold;
+        *dU = quantizer.recover(interp_quad_2(*(dU - stride3x), *(dU - stride), *(dU + stride)), quantization[quant_count ++], eb);
+        *dV = quantizer.recover(interp_quad_2(*(dV - stride3x), *(dV - stride), *(dV + stride)), quantization[quant_count ++], eb);
+        if (n % 2 == 0) {
+            dU = U_pos + (n - 1) * stride;
+            dV = V_pos + (n - 1) * stride;
+	        eb = pow(base, *eb_quant_index_pos ++) * threshold;
+            *dU = quantizer.recover(*(dU - stride), quantization[quant_count ++], eb);
+            *dV = quantizer.recover(*(dV - stride), quantization[quant_count ++], eb);
+        }
+	}
+}
+
+template<typename T>
+void
+sz3_decompress_cp_preserve_2d_online(const unsigned char * compressed, size_t r1, size_t r2, T *& U, T *& V){
+	if(U) free(U);
+	if(V) free(V);
+	size_t num_elements = r1 * r2;
+	const unsigned char * compressed_pos = compressed;
+	int base = 0;
+	read_variable_from_src(compressed_pos, base);
+	printf("base = %d\n", base);
+	double threshold = 0;
+	read_variable_from_src(compressed_pos, threshold);
+	int capacity = 0;
+	read_variable_from_src(compressed_pos, capacity);
+	int interpolation_level = (uint) ceil(log2(max(r1, r2)));
+	auto quantizer = VariableEBLinearQuantizer<T, T>(capacity>>1);
+	size_t remaining_length = num_elements*sizeof(T);//placeholder
+	quantizer.load(compressed_pos, remaining_length);
+
+	int * eb_quant_index = Huffman_decode_tree_and_data(2*1024, num_elements, compressed_pos);
+	int * quantization = Huffman_decode_tree_and_data(2*capacity, 2*num_elements, compressed_pos);
+	printf("pos = %ld\n", compressed_pos - compressed);
+	U = (T *) malloc(num_elements*sizeof(T));
+	V = (T *) malloc(num_elements*sizeof(T));
+	T * U_pos = U;
+	T * V_pos = V;
+	int * eb_quant_index_pos = eb_quant_index;
+	int quant_index = 0;
+	double eb = pow(base, *eb_quant_index_pos ++) * threshold;
+	U_pos[0] = quantizer.recover(0, quantization[quant_index ++], eb);
+	V_pos[0] = quantizer.recover(0, quantization[quant_index ++], eb);
+	for (uint level = interpolation_level; level > 0 && level <= interpolation_level; level--) {
+		size_t stride = 1U << (level - 1);
+		int n1 = (r1 - 1) / stride + 1;
+		int n2 = (r2 - 1) / stride + 1;
+		// std::cout << "level = " << level << ", stride = " << stride << ", n1 = " << n1 << ", n2 = " << n2 << ", quant_index_before = " << quant_index;//  << std::endl;
+		// predict along r1
+		for(int j=0; j<r2; j+=stride*2){
+			recover(U_pos + j, V_pos + j, n1, quantization, quant_index, stride*r2, quantizer, eb_quant_index_pos, base, threshold);
+		}
+		// std::cout << ", quant_index_middle = " << quant_index;
+		// predict along r2
+		for(int i=0; i<r1; i+=stride){
+			recover(U_pos + i*r2, V_pos + i*r2, n2, quantization, quant_index, stride, quantizer, eb_quant_index_pos, base, threshold);
+		}
+		// std::cout << ", quant_index_after = " << quant_index << std::endl;
+	}
+	free(eb_quant_index);
+	free(quantization);
+}
+
+template
+void
+sz3_decompress_cp_preserve_2d_online<float>(const unsigned char * compressed, size_t r1, size_t r2, float *& U, float *& V);
+
+template
+void
+sz3_decompress_cp_preserve_2d_online<double>(const unsigned char * compressed, size_t r1, size_t r2, double *& U, double *& V);

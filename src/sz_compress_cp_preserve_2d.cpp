@@ -3,6 +3,7 @@
 #include "sz_compress_cp_preserve_2d.hpp"
 #include "sz_def.hpp"
 #include "sz_compression_utils.hpp"
+#include "sz3_utils.hpp"
 
 template<typename Type>
 void writefile(const char * file, Type * data, size_t num_elements){
@@ -730,7 +731,7 @@ triangle mesh x0, x1, x2, derive absolute cp-preserving eb for x2 given x0, x1
 */
 template<typename T>
 double 
-derive_cp_eb_for_positions_online_abs(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2, const T c[4]){//, conditions_2d& cond){
+derive_cp_eb_for_positions_online_abs(const T u0, const T u1, const T u2, const T v0, const T v1, const T v2){
 	double M0 = u2*v0 - u0*v2;
   double M1 = u1*v2 - u2*v1;
   double M2 = u0*v1 - u1*v0;
@@ -1031,10 +1032,10 @@ sz_compress_cp_preserve_2d_online_abs(const T * U, const T * V, size_t r1, size_
 		{1, 0, 0},
 		{1, 0, 1}
 	};
-	T inv_C[6][4];
-	for(int i=0; i<6; i++){
-		get_adjugate_matrix_for_position(x[i][0], x[i][1], x[i][2], y[i][0], y[i][1], y[i][2], inv_C[i]);
-	}
+	// T inv_C[6][4];
+	// for(int i=0; i<6; i++){
+	// 	get_adjugate_matrix_for_position(x[i][0], x[i][1], x[i][2], y[i][0], y[i][1], y[i][2], inv_C[i]);
+	// }
 	int index_offset[6][2][2];
 	for(int i=0; i<6; i++){
 		for(int j=0; j<2; j++){
@@ -1067,7 +1068,7 @@ sz_compress_cp_preserve_2d_online_abs(const T * U, const T * V, size_t r1, size_
 					if(in_mesh){
 						// derive abs eb
 						required_eb = MINF(required_eb, derive_cp_eb_for_positions_online_abs(cur_U_pos[offsets[k]], cur_U_pos[offsets[k+1]], cur_U_pos[0],
-							cur_V_pos[offsets[k]], cur_V_pos[offsets[k+1]], cur_V_pos[0], inv_C[k]));
+							cur_V_pos[offsets[k]], cur_V_pos[offsets[k+1]], cur_V_pos[0]));
 					}
 				}				
 			}
@@ -1535,3 +1536,284 @@ sz_compress_cp_preserve_2d_online_abs_relax_FN(const float * U, const float * V,
 template
 unsigned char *
 sz_compress_cp_preserve_2d_online_abs_relax_FN(const double * U, const double * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb);
+
+template <class T>
+inline double
+derive_eb(T * cur_U_pos, T * cur_V_pos, int i, int j, size_t r1, size_t r2, double eb, const int index_offset[6][2][2], const int offsets[7]){
+	// return eb;
+	double required_eb = eb;
+	for(int k=0; k<6; k++){
+		bool in_mesh = true;
+		for(int p=0; p<2; p++){
+			// reserved order!
+			if(!(in_range(i + index_offset[k][p][1], (int)r1) && in_range(j + index_offset[k][p][0], (int)r2))){
+				in_mesh = false;
+				break;
+			}
+		}
+		if(in_mesh){
+			// derive abs eb
+			required_eb = MINF(required_eb, derive_cp_eb_for_positions_online_abs(cur_U_pos[offsets[k]], cur_U_pos[offsets[k+1]], cur_U_pos[0],
+				cur_V_pos[offsets[k]], cur_V_pos[offsets[k+1]], cur_V_pos[0]));
+		}
+	}				
+	return required_eb;
+}
+
+template <class T>
+void sz3_cp_preserve_2d_predict_r1(T * U_pos, T * V_pos, size_t n, size_t stride, size_t j, size_t i_stride, size_t r1, size_t r2, int * quantization, int& quant_count, int *& eb_quant_index_pos, 
+								 int base, double log_of_base, double threshold, double eb, VariableEBLinearQuantizer<T, T>& quantizer, const int index_offset[6][2][2], const int offsets[7]){
+  if(n <= 1){
+      return;
+  }
+  if(n < 5){
+      // all linear
+      for (size_t i = 1; i + 1 < n; i += 2) {
+          T *dU = U_pos + i * stride;
+          T *dV = V_pos + i * stride;
+					double abs_eb = derive_eb(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
+					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_linear(*(dU - stride), *(dU + stride)), abs_eb);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_linear(*(dV - stride), *(dV + stride)), abs_eb);
+      }
+      if (n % 2 == 0) {
+          // T *d = data + (n - 1) * stride;
+          T *dU = U_pos + (n - 1) * stride;
+          T *dV = V_pos + (n - 1) * stride;
+          // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, *(d - stride), eb);
+					double abs_eb = derive_eb(dU, dV, j, (n - 1)*i_stride, r1, r2, eb, index_offset, offsets);
+					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, *(dU - stride), abs_eb);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, *(dV - stride), abs_eb);
+      }
+      // std::cout << "quant_count = " << quant_count << std::endl;
+
+  }
+  else{
+      // cubic
+      size_t stride3x = 3 * stride;
+      size_t stride5x = 5 * stride;
+
+      size_t i = 1;
+      T *dU = U_pos + stride;
+      T *dV = V_pos + stride;
+      // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_quad_1(*(d - stride), *(d + stride), *(d + stride3x)), eb);
+			double abs_eb = derive_eb(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
+			*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_quad_1(*(dU - stride), *(dU + stride), *(dU + stride3x)), abs_eb);
+      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_quad_1(*(dV - stride), *(dV + stride), *(dV + stride3x)), abs_eb);
+
+      for (i = 3; i + 3 < n; i += 2) {
+	        dU = U_pos + i * stride;
+	        dV = V_pos + i * stride;
+          // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_cubic(*(d - stride3x), *(d - stride), *(d + stride), *(d + stride3x)), eb);
+					abs_eb = derive_eb(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
+					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+		      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_cubic(*(dU - stride3x), *(dU - stride), *(dU + stride), *(dU + stride3x)), abs_eb);
+		      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_cubic(*(dV - stride3x), *(dV - stride), *(dV + stride), *(dV + stride3x)), abs_eb);
+      }
+
+      dU = U_pos + i * stride;
+      dV = V_pos + i * stride;
+      // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_quad_2(*(d - stride3x), *(d - stride), *(d + stride)), eb);
+			abs_eb = derive_eb(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
+			*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_quad_2(*(dU - stride3x), *(dU - stride), *(dU + stride)), abs_eb);
+      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_quad_2(*(dV - stride3x), *(dV - stride), *(dV + stride)), abs_eb);
+      if (n % 2 == 0) {
+          dU = U_pos + (n - 1) * stride;
+          dV = V_pos + (n - 1) * stride;
+          // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, *(d - stride), eb);
+					abs_eb = derive_eb(dU, dV, j, (n - 1)*i_stride, r1, r2, eb, index_offset, offsets);
+					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, *(dU - stride), abs_eb);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, *(dV - stride), abs_eb);
+      }
+  }
+}
+
+template <class T>
+void sz3_cp_preserve_2d_predict_r2(T * U_pos, T * V_pos, size_t n, size_t stride, size_t i_stride, size_t j, size_t r1, size_t r2, int * quantization, int& quant_count, int *& eb_quant_index_pos, 
+								 int base, double log_of_base, double threshold, double eb, VariableEBLinearQuantizer<T, T>& quantizer, const int index_offset[6][2][2], const int offsets[7]){
+  if(n <= 1){
+      return;
+  }
+  if(n < 5){
+      // all linear
+      for (size_t i = 1; i + 1 < n; i += 2) {
+          T *dU = U_pos + i * stride;
+          T *dV = V_pos + i * stride;
+					double abs_eb = derive_eb(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
+					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_linear(*(dU - stride), *(dU + stride)), abs_eb);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_linear(*(dV - stride), *(dV + stride)), abs_eb);
+      }
+      if (n % 2 == 0) {
+          // T *d = data + (n - 1) * stride;
+          T *dU = U_pos + (n - 1) * stride;
+          T *dV = V_pos + (n - 1) * stride;
+          // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, *(d - stride), eb);
+					double abs_eb = derive_eb(dU, dV, (n - 1)*i_stride, j, r1, r2, eb, index_offset, offsets);
+					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, *(dU - stride), abs_eb);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, *(dV - stride), abs_eb);
+      }
+      // std::cout << "quant_count = " << quant_count << std::endl;
+
+  }
+  else{
+      // cubic
+      size_t stride3x = 3 * stride;
+      size_t stride5x = 5 * stride;
+
+      size_t i = 1;
+      T *dU = U_pos + stride;
+      T *dV = V_pos + stride;
+      // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_quad_1(*(d - stride), *(d + stride), *(d + stride3x)), eb);
+			double abs_eb = derive_eb(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
+			*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_quad_1(*(dU - stride), *(dU + stride), *(dU + stride3x)), abs_eb);
+      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_quad_1(*(dV - stride), *(dV + stride), *(dV + stride3x)), abs_eb);
+
+      for (i = 3; i + 3 < n; i += 2) {
+	        dU = U_pos + i * stride;
+	        dV = V_pos + i * stride;
+          // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_cubic(*(d - stride3x), *(d - stride), *(d + stride), *(d + stride3x)), eb);
+					abs_eb = derive_eb(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
+					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+		      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_cubic(*(dU - stride3x), *(dU - stride), *(dU + stride), *(dU + stride3x)), abs_eb);
+		      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_cubic(*(dV - stride3x), *(dV - stride), *(dV + stride), *(dV + stride3x)), abs_eb);
+      }
+
+      dU = U_pos + i * stride;
+      dV = V_pos + i * stride;
+      // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_quad_2(*(d - stride3x), *(d - stride), *(d + stride)), eb);
+			abs_eb = derive_eb(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
+			*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_quad_2(*(dU - stride3x), *(dU - stride), *(dU + stride)), abs_eb);
+      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_quad_2(*(dV - stride3x), *(dV - stride), *(dV + stride)), abs_eb);
+      if (n % 2 == 0) {
+          dU = U_pos + (n - 1) * stride;
+          dV = V_pos + (n - 1) * stride;
+          // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, *(d - stride), eb);
+					abs_eb = derive_eb(dU, dV, (n - 1)*i_stride, j, r1, r2, eb, index_offset, offsets);
+					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, *(dU - stride), abs_eb);
+          quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, *(dV - stride), abs_eb);
+      }
+  }
+}
+
+template<typename T>
+unsigned char *
+sz3_compress_cp_preserve_2d_online_abs(const T * U, const T * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb){
+	size_t num_elements = r1 * r2;
+	T * decompressed_U = (T *) malloc(num_elements*sizeof(T));
+	memcpy(decompressed_U, U, num_elements*sizeof(T));
+	T * decompressed_V = (T *) malloc(num_elements*sizeof(T));
+	memcpy(decompressed_V, V, num_elements*sizeof(T));
+	int * eb_quant_index = (int *) malloc(num_elements*sizeof(int));
+	int * quantization = (int *) malloc(2*num_elements*sizeof(int));
+	int * eb_quant_index_pos = eb_quant_index;
+	// next, row by row
+	const int base = 4;
+	const double log_of_base = log2(base);
+	const unsigned int capacity = 65536;
+	const unsigned int intv_radius = (capacity >> 1);
+	unpred_vec<T> unpred_data;
+	T * U_pos = decompressed_U;
+	T * V_pos = decompressed_V;
+	// offsets to get six adjacent triangle indices
+	// the 7-th rolls back to T0
+	/*
+			T3	T4
+		T2	X 	T5
+		T1	T0(T6)
+	*/
+	const int offsets[7] = {
+		-(int)r2, -(int)r2 - 1, -1, (int)r2, (int)r2+1, 1, -(int)r2
+	};
+	const T x[6][3] = {
+		{1, 0, 1},
+		{0, 0, 1},
+		{0, 1, 1},
+		{0, 1, 0},
+		{1, 1, 0},
+		{1, 0, 0}
+	};
+	const T y[6][3] = {
+		{0, 0, 1},
+		{0, 1, 1},
+		{0, 1, 0},
+		{1, 1, 0},
+		{1, 0, 0},
+		{1, 0, 1}
+	};
+	int index_offset[6][2][2];
+	for(int i=0; i<6; i++){
+		for(int j=0; j<2; j++){
+			index_offset[i][j][0] = x[i][j] - x[i][2];
+			index_offset[i][j][1] = y[i][j] - y[i][2];
+		}
+	}
+	double threshold = std::numeric_limits<double>::epsilon();
+
+	int interpolation_level = (uint) ceil(log2(max(r1, r2)));
+	auto quantizer = VariableEBLinearQuantizer<T, T>(capacity>>1);
+	std::cout << r1 << " " << r2 << std::endl;
+	int quant_index = 0;
+	// quantize first data
+	double abs_eb = derive_eb(U_pos, V_pos, 0, 0, r1, r2, max_pwr_eb*0.5, index_offset, offsets);
+	*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+	quantization[quant_index ++] = quantizer.quantize_and_overwrite(*U_pos, 0, abs_eb);
+	quantization[quant_index ++] = quantizer.quantize_and_overwrite(*V_pos, 0, abs_eb);
+	for (uint level = interpolation_level; level > 0 && level <= interpolation_level; level--) {
+		double eb = max_pwr_eb;
+		if(level >= 3){
+			eb *= 0.5;
+		}
+		size_t stride = 1U << (level - 1);
+		int n1 = (r1 - 1) / stride + 1;
+		int n2 = (r2 - 1) / stride + 1;
+		// std::cout << "level = " << level << ", stride = " << stride << ", n1 = " << n1 << ", n2 = " << n2 << ", quant_index_before = " << quant_index;//  << std::endl;
+		// predict along r1
+		for(int j=0; j<r2; j+=stride*2){
+			sz3_cp_preserve_2d_predict_r2(U_pos + j, V_pos + j, n1, stride*r2, stride, j, r1, r2, quantization, quant_index, eb_quant_index_pos, 
+								 base, log_of_base, threshold, eb, quantizer, index_offset, offsets);
+			// predict(dec_data + j, n1, quantization, quant_index, stride*r2, quantizer, precision);
+		}
+		// std::cout << ", quant_index_middle = " << quant_index;
+		// predict along r2
+		for(int i=0; i<r1; i+=stride){
+			sz3_cp_preserve_2d_predict_r1(U_pos + i*r2, V_pos + i*r2, n2, stride, i, stride, r1, r2, quantization, quant_index, eb_quant_index_pos, 
+								 base, log_of_base, threshold, eb, quantizer, index_offset, offsets);
+			// predict(dec_data + i*r2, n2, quantization, quant_index, stride, quantizer, precision);
+		}
+		// std::cout << ", quant_index_after = " << quant_index << std::endl;
+	}
+
+	free(decompressed_U);
+	free(decompressed_V);
+	printf("offsets eb_q, data_q: %ld %ld\n", eb_quant_index_pos - eb_quant_index, quant_index);
+	unsigned char * compressed = (unsigned char *) malloc(2*num_elements*sizeof(T));
+	unsigned char * compressed_pos = compressed;
+	write_variable_to_dst(compressed_pos, base);
+	write_variable_to_dst(compressed_pos, threshold);
+	write_variable_to_dst(compressed_pos, capacity);
+	quantizer.save(compressed_pos);
+	Huffman_encode_tree_and_data(2*1024, eb_quant_index, num_elements, compressed_pos);
+	free(eb_quant_index);
+	Huffman_encode_tree_and_data(2*capacity, quantization, 2*num_elements, compressed_pos);
+	printf("pos = %ld\n", compressed_pos - compressed);
+	free(quantization);
+	compressed_size = compressed_pos - compressed;
+	return compressed;	
+}
+
+template
+unsigned char *
+sz3_compress_cp_preserve_2d_online_abs(const float * U, const float * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb);
+
+template
+unsigned char *
+sz3_compress_cp_preserve_2d_online_abs(const double * U, const double * V, size_t r1, size_t r2, size_t& compressed_size, bool transpose, double max_pwr_eb);
