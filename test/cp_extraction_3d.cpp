@@ -124,7 +124,6 @@ update_index_and_value(double v[4][3], int local_id, int global_id, const T * U,
   v[local_id][2] = W[global_id];
 }
 
-int count = 0;
 static void 
 check_simplex_seq(const double v[4][3], const double X[3][3], int i, int j, int k, int simplex_id, std::unordered_map<int, critical_point_t>& critical_points){
   for(int i=0; i<4; i++){
@@ -150,27 +149,6 @@ check_simplex_seq(const double v[4][3], const double X[3][3], int i, int j, int 
   cp.type = get_cp_type(X, v);
   cp.simplex_id = simplex_id;
   critical_points[simplex_id] = cp;
-
-  { 
-    double min = 10000;
-    for(int i=0; i<4; i++){
-      for(int j=0; j<3; j++){
-        if((v[i][j] != 0) && (fabs(v[i][j])) < min) min = fabs(v[i][j]);
-      }
-    }
-    if(min < 1e-10){
-      printf("min = %.16f\n", min);
-      for(int i=0; i<4; i++){
-        for(int j=0; j<3; j++){
-          std::cout << v[i][j] << " ";
-        }
-        std::cout << "\n";
-      }
-      count ++;
-      std::cout << mu[0] << " " << mu[1] << " " << mu[2] << " " << mu[3] << "\n";      
-      if(count == 10) exit(0);
-    }
-  }
 
 }
 
