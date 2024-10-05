@@ -201,3 +201,88 @@ sz_decompress_cp_preserve_3d_unstructured<float>(const unsigned char * compresse
 template
 void
 sz_decompress_cp_preserve_3d_unstructured<double>(const unsigned char * compressed, int n, const double * points, int m, const int * tets_ind, double *& data);
+
+template<typename T>
+void
+sz_decompress_cp_preserve_3d_online_abs(const unsigned char * compressed, size_t r1, size_t r2, size_t r3, T *& U, T *& V, T *& W){
+	if(U) free(U);
+	if(V) free(V);
+	if(W) free(W);
+	size_t num_elements = r1 * r2 * r3;
+	const unsigned char * compressed_pos = compressed;
+	int base = 0;
+	read_variable_from_src(compressed_pos, base);
+	printf("base = %d\n", base);
+	double threshold = 0;
+	read_variable_from_src(compressed_pos, threshold);
+	int intv_radius = 0;
+	read_variable_from_src(compressed_pos, intv_radius);
+	const int capacity = (intv_radius << 1);
+	size_t data_quant_num = 0;
+	read_variable_from_src(compressed_pos, data_quant_num);
+	size_t unpred_data_count = 0;
+	read_variable_from_src(compressed_pos, unpred_data_count);
+	const T * unpred_data_pos = (T *) compressed_pos;
+	compressed_pos += unpred_data_count*sizeof(T);	
+	int * eb_quant_index = Huffman_decode_tree_and_data(2*1024, num_elements, compressed_pos);
+	int * data_quant_index = Huffman_decode_tree_and_data(2*capacity, data_quant_num, compressed_pos);
+	U = (T *) malloc(num_elements*sizeof(T));
+	V = (T *) malloc(num_elements*sizeof(T));
+	W = (T *) malloc(num_elements*sizeof(T));
+	T * U_pos = U;
+	T * V_pos = V;
+	T * W_pos = W;
+	size_t dim0_offset = r2 * r3;
+	size_t dim1_offset = r3;
+	int * eb_quant_index_pos = eb_quant_index;
+	int * data_quant_index_pos = data_quant_index;
+	double log_of_base = log2(base);
+	int eb_quant_index_max = (int) (log2(1.0 / threshold)/log_of_base) + 1;
+	std::unordered_set<int> unpred_data_indices;
+	for(int i=0; i<r1; i++){
+		for(int j=0; j<r2; j++){
+			for(int k=0; k<r3; k++){
+				// printf("%ld %ld %ld\n", i, j, k);
+				T * data_pos[3] = {U_pos, V_pos, W_pos};
+				int index = i*dim0_offset + j*dim1_offset + k;
+				// get eb
+				if(*eb_quant_index_pos == 0){
+					for(int p=0; p<3; p++){
+						*(data_pos[p]) = *(unpred_data_pos ++);
+					}
+					eb_quant_index_pos ++;
+				}
+				else{
+					double eb = pow(base, *eb_quant_index_pos) * threshold;
+					eb_quant_index_pos ++;
+					for(int p=0; p<3; p++){
+						T * cur_log_data_pos = data_pos[p];					
+						T d0 = (i && j && k) ? cur_log_data_pos[- dim0_offset - dim1_offset - 1] : 0;
+						T d1 = (i && j) ? cur_log_data_pos[- dim0_offset - dim1_offset] : 0;
+						T d2 = (i && k) ? cur_log_data_pos[- dim0_offset - 1] : 0;
+						T d3 = (i) ? cur_log_data_pos[- dim0_offset] : 0;
+						T d4 = (j && k) ? cur_log_data_pos[- dim1_offset - 1] : 0;
+						T d5 = (j) ? cur_log_data_pos[- dim1_offset] : 0;
+						T d6 = (k) ? cur_log_data_pos[- 1] : 0;
+						T pred = d0 + d3 + d5 + d6 - d1 - d2 - d4;
+						*cur_log_data_pos = pred + 2 * (data_quant_index_pos[p] - intv_radius) * eb;
+					}
+					data_quant_index_pos += 3;
+				}
+				U_pos ++;
+				V_pos ++;
+				W_pos ++;
+			}
+		}
+	}
+	free(eb_quant_index);
+	free(data_quant_index);
+}
+
+template
+void
+sz_decompress_cp_preserve_3d_online_abs<float>(const unsigned char * compressed, size_t r1, size_t r2, size_t r3, float *& U, float *& V, float *& W);
+
+template
+void
+sz_decompress_cp_preserve_3d_online_abs<double>(const unsigned char * compressed, size_t r1, size_t r2, size_t r3, double *& U, double *& V, double *& W);

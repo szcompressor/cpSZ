@@ -4,7 +4,7 @@
 #include "sz_def.hpp"
 #include "sz_compression_utils.hpp"
 #include <complex>
-#include "../test/utils.hpp"
+#include "utils.hpp"
 
 // maximal error bound to keep the sign of A*(1 + e_1) + B*(1 + e_2) + C
 template<typename T>

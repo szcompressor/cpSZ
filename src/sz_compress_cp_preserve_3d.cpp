@@ -4,12 +4,254 @@
 #include "sz_def.hpp"
 #include "sz_compression_utils.hpp"
 #include <unordered_map>
+#include <ftk/numeric/inverse_linear_interpolation_solver.hh>
 
-template<typename Type>
-void writefile(const char * file, Type * data, size_t num_elements){
-	std::ofstream fout(file, std::ios::binary);
-	fout.write(reinterpret_cast<const char*>(&data[0]), num_elements*sizeof(Type));
-	fout.close();
+static const int coordinates[24][4][3] = {
+	// offset = 0, 0, 0
+	{
+		{0, 0, 1},
+		{0, 1, 1},
+		{1, 1, 1},
+		{0, 0, 0}
+	},
+	{
+		{0, 1, 0},
+		{0, 1, 1},
+		{1, 1, 1},
+		{0, 0, 0}
+	},
+	{
+		{0, 0, 1},
+		{1, 0, 1},
+		{1, 1, 1},
+		{0, 0, 0}
+	},
+	{
+		{1, 0, 0},
+		{1, 0, 1},
+		{1, 1, 1},
+		{0, 0, 0}
+	},
+	{
+		{0, 1, 0},
+		{1, 1, 0},
+		{1, 1, 1},
+		{0, 0, 0}
+	},
+	{
+		{1, 0, 0},
+		{1, 1, 0},
+		{1, 1, 1},
+		{0, 0, 0}
+	},
+	// offset = -1, 0, 0
+	{
+		{0, 0, 0},
+		{1, 0, 1},
+		{1, 1, 1},
+		{1, 0, 0}
+	},
+	{
+		{0, 0, 0},
+		{1, 1, 0},
+		{1, 1, 1},
+		{1, 0, 0}
+	},
+	// offset = 0, -1, 0
+	{
+		{0, 0, 0},
+		{0, 1, 1},
+		{1, 1, 1},
+		{0, 1, 0}
+	},
+	{
+		{0, 0, 0},
+		{1, 1, 0},
+		{1, 1, 1},
+		{0, 1, 0}
+	},
+	// offset = -1, -1, 0
+	{
+		{0, 0, 0},
+		{0, 1, 0},
+		{1, 1, 1},
+		{1, 1, 0}
+	},
+	{
+		{0, 0, 0},
+		{1, 0, 0},
+		{1, 1, 1},
+		{1, 1, 0}
+	},
+	// offset = 0, 0, -1
+	{
+		{0, 0, 0},
+		{0, 1, 1},
+		{1, 1, 1},
+		{0, 0, 1}
+	},
+	{
+		{0, 0, 0},
+		{1, 0, 1},
+		{1, 1, 1},
+		{0, 0, 1}
+	},
+	// offset = -1, 0, -1
+	{
+		{0, 0, 0},
+		{0, 0, 1},
+		{1, 1, 1},
+		{1, 0, 1}
+	},
+	{
+		{0, 0, 0},
+		{1, 0, 0},
+		{1, 1, 1},
+		{1, 0, 1}
+	},
+	// offset = 0, -1, -1
+	{
+		{0, 0, 0},
+		{0, 0, 1},
+		{1, 1, 1},
+		{0, 1, 1}
+	},
+	{
+		{0, 0, 0},
+		{0, 1, 0},
+		{1, 1, 1},
+		{0, 1, 1}
+	},
+	// offset = -1, -1, -1
+	{
+		{0, 0, 0},
+		{0, 0, 1},
+		{0, 1, 1},
+		{1, 1, 1}
+	},
+	{
+		{0, 0, 0},
+		{0, 1, 0},
+		{0, 1, 1},
+		{1, 1, 1}
+	},
+	{
+		{0, 0, 0},
+		{0, 0, 1},
+		{1, 0, 1},
+		{1, 1, 1}
+	},
+	{
+		{0, 0, 0},
+		{1, 0, 0},
+		{1, 0, 1},
+		{1, 1, 1}
+	},
+	{
+		{0, 0, 0},
+		{0, 1, 0},
+		{1, 1, 0},
+		{1, 1, 1}
+	},
+	{
+		{0, 0, 0},
+		{1, 0, 0},
+		{1, 1, 0},
+		{1, 1, 1}
+	}
+};
+
+// default coordinates for tets in a cell
+static const double default_coords[6][4][3] = {
+  {
+    {0, 0, 0},
+    {0, 0, 1},
+    {0, 1, 1},
+    {1, 1, 1}
+  },
+  {
+    {0, 0, 0},
+    {0, 1, 0},
+    {0, 1, 1},
+    {1, 1, 1}
+  },
+  {
+    {0, 0, 0},
+    {0, 0, 1},
+    {1, 0, 1},
+    {1, 1, 1}
+  },
+  {
+    {0, 0, 0},
+    {1, 0, 0},
+    {1, 0, 1},
+    {1, 1, 1}
+  },
+  {
+    {0, 0, 0},
+    {0, 1, 0},
+    {1, 1, 0},
+    {1, 1, 1}
+  },
+  {
+    {0, 0, 0},
+    {1, 0, 0},
+    {1, 1, 0},
+    {1, 1, 1}
+  },
+};
+
+// compute offsets for simplex, index, and positions
+static void 
+compute_offset(ptrdiff_t dim0_offset, ptrdiff_t dim1_offset, ptrdiff_t cell_dim0_offset, ptrdiff_t cell_dim1_offset,
+				int simplex_offset[24], int index_offset[24][3][3], int offset[24][3]){
+	int * simplex_offset_pos = simplex_offset;
+	ptrdiff_t base = 0;
+	// offset = 0, 0, 0
+	for(int i=0; i<6; i++){
+		*(simplex_offset_pos++) = i;
+	}
+	// offset = -1, 0, 0
+	base = -6;
+	*(simplex_offset_pos++) = base + 3;
+	*(simplex_offset_pos++) = base + 5;
+	// offset = 0, -1, 0
+	base = -6*cell_dim1_offset;
+	*(simplex_offset_pos++) = base + 1;
+	*(simplex_offset_pos++) = base + 4;
+	// offset = -1, -1, 0
+	base = -6 - 6*cell_dim1_offset;
+	*(simplex_offset_pos++) = base + 4;
+	*(simplex_offset_pos++) = base + 5;
+	// offset = 0, 0, -1
+	base = -6*cell_dim0_offset;
+	*(simplex_offset_pos++) = base + 0;
+	*(simplex_offset_pos++) = base + 2;
+	// offset = -1, 0, -1
+	base = -6*cell_dim0_offset - 6;
+	*(simplex_offset_pos++) = base + 2;
+	*(simplex_offset_pos++) = base + 3;
+	// offset = 0, -1, -1
+	base = -6*cell_dim1_offset - 6*cell_dim0_offset;
+	*(simplex_offset_pos++) = base + 0;
+	*(simplex_offset_pos++) = base + 1;
+	// offset = -1, -1, -1
+	base = -6*cell_dim0_offset - 6*cell_dim1_offset - 6;
+	for(int i=0; i<6; i++){
+		*(simplex_offset_pos++) = base + i;
+	}
+	for(int i=0; i<24; i++){
+		for(int j=0; j<3; j++){
+			for(int k=0; k<3; k++){
+				index_offset[i][j][k] = coordinates[i][j][k] - coordinates[i][3][k];
+			}
+		}
+	}
+	for(int i=0; i<24; i++){
+		for(int x=0; x<3; x++){
+			offset[i][x] = (coordinates[i][x][0] - coordinates[i][3][0]) + (coordinates[i][x][1] - coordinates[i][3][1]) * dim1_offset + (coordinates[i][x][2] - coordinates[i][3][2]) * dim0_offset;
+		}
+	}	
 }
 
 template<typename T>
@@ -120,45 +362,6 @@ sz_compress_cp_preserve_3d_offline_log(const T * U, const T * V, const T * W, si
 	for(int i=0; i<num_elements; i++){
 		eb_offline[i] = max_pwr_eb;
 	}
-	const int coordinates[6][4][3] = {
-		// offset = 0, 0, 0
-		{
-			{0, 0, 1},
-			{0, 1, 1},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		{
-			{0, 1, 0},
-			{0, 1, 1},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		{
-			{0, 0, 1},
-			{1, 0, 1},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		{
-			{1, 0, 0},
-			{1, 0, 1},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		{
-			{0, 1, 0},
-			{1, 1, 0},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		{
-			{1, 0, 0},
-			{1, 1, 0},
-			{1, 1, 1},
-			{0, 0, 0}
-		}
-	};
 	int index_offset[6][3][3];
 	for(int i=0; i<6; i++){
 		for(int j=0; j<3; j++){
@@ -575,218 +778,17 @@ sz_compress_cp_preserve_3d_online_log(const T * U, const T * V, const T * W, siz
 	const double log_of_base = log2(base);
 	const int capacity = 65536;
 	const int intv_radius = (capacity >> 1);
-	size_t dim0_offset = r2 * r3;
-	size_t dim1_offset = r3;
+	ptrdiff_t dim0_offset = r2 * r3;
+	ptrdiff_t dim1_offset = r3;
+	ptrdiff_t cell_dim0_offset = (r2-1) * (r3-1);
+	ptrdiff_t cell_dim1_offset = r3-1;
 	// offsets to get 24 adjacent simplex indices
 	// x -> z, high -> low
 	// current data would always be the last index, i.e. x[i][3]
-	const int coordinates[24][4][3] = {
-		// offset = 0, 0, 0
-		{
-			{0, 0, 1},
-			{0, 1, 1},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		{
-			{0, 1, 0},
-			{0, 1, 1},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		{
-			{0, 0, 1},
-			{1, 0, 1},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		{
-			{1, 0, 0},
-			{1, 0, 1},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		{
-			{0, 1, 0},
-			{1, 1, 0},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		{
-			{1, 0, 0},
-			{1, 1, 0},
-			{1, 1, 1},
-			{0, 0, 0}
-		},
-		// offset = -1, 0, 0
-		{
-			{0, 0, 0},
-			{1, 0, 1},
-			{1, 1, 1},
-			{1, 0, 0}
-		},
-		{
-			{0, 0, 0},
-			{1, 1, 0},
-			{1, 1, 1},
-			{1, 0, 0}
-		},
-		// offset = 0, -1, 0
-		{
-			{0, 0, 0},
-			{0, 1, 1},
-			{1, 1, 1},
-			{0, 1, 0}
-		},
-		{
-			{0, 0, 0},
-			{1, 1, 0},
-			{1, 1, 1},
-			{0, 1, 0}
-		},
-		// offset = -1, -1, 0
-		{
-			{0, 0, 0},
-			{0, 1, 0},
-			{1, 1, 1},
-			{1, 1, 0}
-		},
-		{
-			{0, 0, 0},
-			{1, 0, 0},
-			{1, 1, 1},
-			{1, 1, 0}
-		},
-		// offset = 0, 0, -1
-		{
-			{0, 0, 0},
-			{0, 1, 1},
-			{1, 1, 1},
-			{0, 0, 1}
-		},
-		{
-			{0, 0, 0},
-			{1, 0, 1},
-			{1, 1, 1},
-			{0, 0, 1}
-		},
-		// offset = -1, 0, -1
-		{
-			{0, 0, 0},
-			{0, 0, 1},
-			{1, 1, 1},
-			{1, 0, 1}
-		},
-		{
-			{0, 0, 0},
-			{1, 0, 0},
-			{1, 1, 1},
-			{1, 0, 1}
-		},
-		// offset = 0, -1, -1
-		{
-			{0, 0, 0},
-			{0, 0, 1},
-			{1, 1, 1},
-			{0, 1, 1}
-		},
-		{
-			{0, 0, 0},
-			{0, 1, 0},
-			{1, 1, 1},
-			{0, 1, 1}
-		},
-		// offset = -1, -1, -1
-		{
-			{0, 0, 0},
-			{0, 0, 1},
-			{0, 1, 1},
-			{1, 1, 1}
-		},
-		{
-			{0, 0, 0},
-			{0, 1, 0},
-			{0, 1, 1},
-			{1, 1, 1}
-		},
-		{
-			{0, 0, 0},
-			{0, 0, 1},
-			{1, 0, 1},
-			{1, 1, 1}
-		},
-		{
-			{0, 0, 0},
-			{1, 0, 0},
-			{1, 0, 1},
-			{1, 1, 1}
-		},
-		{
-			{0, 0, 0},
-			{0, 1, 0},
-			{1, 1, 0},
-			{1, 1, 1}
-		},
-		{
-			{0, 0, 0},
-			{1, 0, 0},
-			{1, 1, 0},
-			{1, 1, 1}
-		}
-	};
-	ptrdiff_t simplex_offset[24];
-	{
-		ptrdiff_t * simplex_offset_pos = simplex_offset;
-		ptrdiff_t base = 0;
-		// offset = 0, 0, 0
-		for(int i=0; i<6; i++){
-			*(simplex_offset_pos++) = i;
-		}
-		// offset = -1, 0, 0
-		base = -6*dim0_offset;
-		*(simplex_offset_pos++) = base + 3;
-		*(simplex_offset_pos++) = base + 5;
-		// offset = 0, -1, 0
-		base = -6*dim1_offset;
-		*(simplex_offset_pos++) = base + 1;
-		*(simplex_offset_pos++) = base + 4;
-		// offset = -1, -1, 0
-		base = -6*dim0_offset - 6*dim1_offset;
-		*(simplex_offset_pos++) = base + 4;
-		*(simplex_offset_pos++) = base + 5;
-		// offset = 0, 0, -1
-		base = -6;
-		*(simplex_offset_pos++) = base + 0;
-		*(simplex_offset_pos++) = base + 2;
-		// offset = -1, 0, -1
-		base = -6*dim0_offset - 6;
-		*(simplex_offset_pos++) = base + 2;
-		*(simplex_offset_pos++) = base + 3;
-		// offset = 0, -1, -1
-		base = -6*dim1_offset - 6;
-		*(simplex_offset_pos++) = base + 0;
-		*(simplex_offset_pos++) = base + 1;
-		// offset = -1, -1, -1
-		base = -6*dim0_offset - 6*dim1_offset - 6;
-		for(int i=0; i<6; i++){
-			*(simplex_offset_pos++) = base + i;
-		}
-	}
+	int simplex_offset[24];
 	int index_offset[24][3][3];
-	for(int i=0; i<24; i++){
-		for(int j=0; j<3; j++){
-			for(int k=0; k<3; k++){
-				index_offset[i][j][k] = coordinates[i][j][k] - coordinates[i][3][k];
-			}
-		}
-	}
-	ptrdiff_t offset[24][3];
-	for(int i=0; i<24; i++){
-		for(int x=0; x<3; x++){
-			// offset[i][x] = (coordinates[i][x][0] - coordinates[i][3][0]) * dim0_offset + (coordinates[i][x][1] - coordinates[i][3][1]) * dim1_offset + (coordinates[i][x][2] - coordinates[i][3][2]);
-			offset[i][x] = (coordinates[i][x][0] - coordinates[i][3][0]) + (coordinates[i][x][1] - coordinates[i][3][1]) * dim1_offset + (coordinates[i][x][2] - coordinates[i][3][2]) * dim0_offset;
-		}
-	}
+	int offset[24][3];
+	compute_offset(dim0_offset, dim1_offset, cell_dim0_offset, cell_dim1_offset, simplex_offset, index_offset, offset);
 	T * cur_log_U_pos = log_U;
 	T * cur_log_V_pos = log_V;
 	T * cur_log_W_pos = log_W;
@@ -1150,6 +1152,349 @@ template
 unsigned char *
 sz_compress_cp_preserve_3d_unstructured(int n, const double * points, const double * data, int m, const int * tets_ind, size_t& compressed_size, double max_pwr_eb);
 
+// maximal absolute error bound to keep the sign of A*e_1 + B*e_2 + C*e_3 + D
+template<typename T>
+inline double max_eb_to_keep_sign_3d_online_abs(const T A, const T B, const T C, const T D=0){
+	if(fabs(A) + fabs(B) + fabs(C) == 0){
+		if(D == 0) return 0;
+		return 1e9;
+	}
+	return fabs(D) / (fabs(A) + fabs(B) + fabs(C));
+}
+
+template<typename T>
+double 
+max_eb_to_keep_position_and_type_3d_online_abs(const T u0, const T u1, const T u2, const T u3, const T v0, const T v1, const T v2, const T v3,
+	const T w0, const T w1, const T w2, const T w3){
+	// double u3_0 = - u3*v1*w2 + u3*v2*w1, u3_1 = - u3*v2*w0 + u3*v0*w2, u3_2 = - u3*v0*w1 + u3*v1*w0;
+	// double v3_0 = u1*v3*w2 - u2*v3*w1, v3_1 = u2*v3*w0 - u0*v3*w2, v3_2 = u0*v3*w1 - u1*v3*w0;
+	// double w3_0 = - u1*v2*w3 + u2*v1*w3, w3_1 = u0*v2*w3 - u2*v0*w3, w3_2 = - u0*v1*w3 + u1*v0*w3;
+	// double c_4 = u0*v1*w2 - u0*v2*w1 + u1*v2*w0 - u1*v0*w2 + u2*v0*w1 - u2*v1*w0;
+	// double M0 = u3_0 + v3_0 + w3_0;
+	// double M1 = u3_1 + v3_1 + w3_1;
+	// double M2 = u3_2 + v3_2 + w3_2;
+	// double M3 = c_4;
+
+	// double u3_0 = - u3*v1*w2 + u3*v2*w1, u3_1 = - u3*v2*w0 + u3*v0*w2, u3_2 = - u3*v0*w1 + u3*v1*w0;
+	// double v3_0 = u1*v3*w2 - u2*v3*w1, v3_1 = u2*v3*w0 - u0*v3*w2, v3_2 = u0*v3*w1 - u1*v3*w0;
+	// double w3_0 = - u1*v2*w3 + u2*v1*w3, w3_1 = u0*v2*w3 - u2*v0*w3, w3_2 = - u0*v1*w3 + u1*v0*w3;
+	double u3_0 = - v1*w2 + v2*w1, u3_1 = - v2*w0 + v0*w2, u3_2 = - v0*w1 + v1*w0;
+	double v3_0 = u1*w2 - u2*w1, v3_1 = u2*w0 - u0*w2, v3_2 = u0*w1 - u1*w0;
+	double w3_0 = - u1*v2 + u2*v1, w3_1 = u0*v2 - u2*v0, w3_2 = - u0*v1 + u1*v0;
+	double c_4 = u0*v1*w2 - u0*v2*w1 + u1*v2*w0 - u1*v0*w2 + u2*v0*w1 - u2*v1*w0;
+	double M0 = u3_0*u3 + v3_0*v3 + w3_0*w3;
+	double M1 = u3_1*u3 + v3_1*v3 + w3_1*w3;
+	double M2 = u3_2*u3 + v3_2*v3 + w3_2*w3;
+	double M3 = c_4;
+	double M = M0 + M1 + M2 + M3;
+	if(fabs(M) < 1e-10){
+		return 0;
+	}
+	bool flag[4];
+	flag[0] = (M0 == 0) || (M / M0 > 1);
+	flag[1] = (M1 == 0) || (M / M1 > 1);
+	flag[2] = (M2 == 0) || (M / M2 > 1);
+	flag[3] = (M3 == 0) || (M / M3 > 1);
+	if(flag[0] && flag[1] && flag[2] && flag[3]){
+		// cp found
+		return 0;
+	}
+	else{
+		double eb = 0;
+		double cur_eb = 0;
+		// std::cout << u0 << " " << u1 << " " << u2 << " " << u3 << std::endl;
+		// std::cout << v0 << " " << v1 << " " << v2 << " " << v3 << std::endl;
+		// std::cout << w0 << " " << w1 << " " << w2 << " " << w3 << std::endl;
+		// if(!flag[0]){
+		// 	cur_eb = MIN(max_eb_to_keep_sign_3d_online_abs(u3_0 / u3, v3_0 / v3, w3_0 / w3, u3_0 + v3_0 + w3_0), 
+		// 			max_eb_to_keep_sign_3d_online_abs(u3_1 / u3 + u3_2 / u3, v3_1 / v3 + v3_2 / v3, w3_1 / w3 + w3_2 / w3, u3_1 + u3_2 + v3_1 + v3_2 + w3_1 + w3_2 + c_4));
+		// 	eb = MAX(eb, cur_eb);
+		// }
+		// if(!flag[1]){
+		// 	cur_eb = MIN(max_eb_to_keep_sign_3d_online_abs(u3_1 / u3, v3_1 / v3, w3_1 / w3, u3_1 + v3_1 + w3_1), 
+		// 			max_eb_to_keep_sign_3d_online_abs(u3_0 / u3 + u3_2 / u3, v3_0 / v3 + v3_2 / v3, w3_0 / w3 + w3_2 / w3, u3_0 + u3_2 + v3_0 + v3_2 + w3_0 + w3_2 + c_4));
+		// 	eb = MAX(eb, cur_eb);
+		// }
+		// if(!flag[2]){
+		// 	cur_eb = MIN(max_eb_to_keep_sign_3d_online_abs(u3_2 / u3, v3_2 / v3, w3_2 / w3, u3_2 + v3_2 + w3_2), 
+		// 			max_eb_to_keep_sign_3d_online_abs(u3_0 / u3 + u3_1 / u3, v3_0 / v3 + v3_1 / v3, w3_0 / w3 + w3_1 / w3, u3_0 + u3_1 + v3_0 + v3_1 + w3_0 + w3_1 + c_4));
+		// 	eb = MAX(eb, cur_eb);
+		// }
+		// if(!flag[3]){
+		// 	cur_eb = max_eb_to_keep_sign_3d_online_abs(u3_0 / u3 + u3_1 / u3 + u3_2 / u3, v3_0 / v3 + v3_1 / v3 + v3_2 / v3, w3_0 / w3 + w3_1 / w3 + w3_2 / w3, u3_0 + u3_1 + u3_2 + v3_0 + v3_1 + v3_2 + w3_0 + w3_1 + w3_2);
+		// 	eb = MAX(eb, cur_eb);
+		// }
+		if(!flag[0]){
+			cur_eb = MIN(max_eb_to_keep_sign_3d_online_abs(u3_0, v3_0, w3_0, M0), 
+					max_eb_to_keep_sign_3d_online_abs(u3_1 + u3_2, v3_1 + v3_2, w3_1 + w3_2, M1 + M2 + M3));
+			eb = MAX(eb, cur_eb);
+				// std::cout << cur_eb << "\n";
+		}
+		if(!flag[1]){
+			cur_eb = MIN(max_eb_to_keep_sign_3d_online_abs(u3_1, v3_1, w3_1, M1), 
+					max_eb_to_keep_sign_3d_online_abs(u3_0 + u3_2, v3_0 + v3_2, w3_0 + w3_2, M0 + M2 + M3));
+			eb = MAX(eb, cur_eb);
+				// std::cout << cur_eb << "\n";
+		}
+		if(!flag[2]){
+			cur_eb = MIN(max_eb_to_keep_sign_3d_online_abs(u3_2, v3_2, w3_2, M2), 
+					max_eb_to_keep_sign_3d_online_abs(u3_0 + u3_1, v3_0 + v3_1, w3_0 + w3_1, M0 + M1 + M3));
+			eb = MAX(eb, cur_eb);
+				// std::cout << cur_eb << "\n";
+		}
+		if(!flag[3]){
+			cur_eb = max_eb_to_keep_sign_3d_online_abs(u3_0 + u3_1 + u3_2, v3_0 + v3_1 + v3_2, w3_0 + w3_1 + w3_2, M0 + M1 + M2);
+			eb = MAX(eb, cur_eb);
+				// std::cout << cur_eb << "\n";
+		}
+		return eb;
+	}
+}
+
+template<typename T>
+static inline void 
+update_index_and_value(double v[4][3], int local_id, int global_id, const T * U, const T * V, const T * W){
+	v[local_id][0] = U[global_id];
+	v[local_id][1] = V[global_id];
+	v[local_id][2] = W[global_id];
+}
+
+template<typename T>
+static int 
+check_cp(T v[4][3]){
+	double mu[4]; // check intersection
+	double cond;
+	double threshold = 0.0;
+	bool succ = ftk::inverse_lerp_s3v3(v, mu, &cond, threshold);
+	if(!succ) return -1;
+	return 1;
+}
+
+template<typename T>
+static vector<bool> 
+compute_cp(const T * U, const T * V, const T * W, int r1, int r2, int r3){
+	// check cp for all cells
+	vector<bool> cp_exist(6*(r1-1)*(r2-1)*(r3-1), 0);
+	ptrdiff_t dim0_offset = r2*r3;
+	ptrdiff_t dim1_offset = r3;
+	ptrdiff_t cell_dim0_offset = (r2-1)*(r3-1);
+	ptrdiff_t cell_dim1_offset = r3-1;
+	double v[4][3] = {0};
+	for(int i=0; i<r1-1; i++){
+		if(i%10==0) std::cout << i << " / " << r1-1 << std::endl;
+		for(int j=0; j<r2-1; j++){
+			for(int k=0; k<r3-1; k++){
+				// order (reserved, z->x):
+				ptrdiff_t cell_offset = 6*(i*cell_dim0_offset + j*cell_dim1_offset + k);
+				// (ftk-0) 000, 001, 011, 111
+				update_index_and_value(v, 0, i*dim0_offset + j*dim1_offset + k, U, V, W);
+				update_index_and_value(v, 1, (i+1)*dim0_offset + j*dim1_offset + k, U, V, W);
+				update_index_and_value(v, 2, (i+1)*dim0_offset + (j+1)*dim1_offset + k, U, V, W);
+				update_index_and_value(v, 3, (i+1)*dim0_offset + (j+1)*dim1_offset + (k+1), U, V, W);
+				cp_exist[cell_offset] = (check_cp(v) == 1);
+				// (ftk-2) 000, 010, 011, 111
+				update_index_and_value(v, 1, i*dim0_offset + (j+1)*dim1_offset + k, U, V, W);
+				cp_exist[cell_offset + 1] = (check_cp(v) == 1);
+				// (ftk-1) 000, 001, 101, 111
+				update_index_and_value(v, 1, (i+1)*dim0_offset + j*dim1_offset + k, U, V, W);
+				update_index_and_value(v, 2, (i+1)*dim0_offset + j*dim1_offset + k+1, U, V, W);
+				cp_exist[cell_offset + 2] = (check_cp(v) == 1);
+				// (ftk-4) 000, 100, 101, 111
+				update_index_and_value(v, 1, i*dim0_offset + j*dim1_offset + k+1, U, V, W);
+				cp_exist[cell_offset + 3] = (check_cp(v) == 1);
+				// (ftk-3) 000, 010, 110, 111
+				update_index_and_value(v, 1, i*dim0_offset + (j+1)*dim1_offset + k, U, V, W);
+				update_index_and_value(v, 2, i*dim0_offset + (j+1)*dim1_offset + k+1, U, V, W);
+				cp_exist[cell_offset + 4] = (check_cp(v) == 1);
+				// (ftk-5) 000, 100, 110, 111
+				update_index_and_value(v, 1, i*dim0_offset + j*dim1_offset + k+1, U, V, W);
+				cp_exist[cell_offset + 5] = (check_cp(v) == 1);
+			}
+		}
+	}	
+	return cp_exist;	
+}
+
+template<typename T>
+unsigned char *
+sz_compress_cp_preserve_3d_online_abs(const T * U, const T * V, const T * W, size_t r1, size_t r2, size_t r3, size_t& compressed_size, double max_abs_eb){
+	size_t num_elements = r1 * r2 * r3;
+	T * decompressed_U = (T *) malloc(num_elements*sizeof(T));
+	memcpy(decompressed_U, U, num_elements*sizeof(T));
+	T * decompressed_V = (T *) malloc(num_elements*sizeof(T));
+	memcpy(decompressed_V, V, num_elements*sizeof(T));
+	T * decompressed_W = (T *) malloc(num_elements*sizeof(T));
+	memcpy(decompressed_W, W, num_elements*sizeof(T));
+	int * eb_quant_index = (int *) malloc(num_elements*sizeof(int));
+	int * data_quant_index = (int *) malloc(3*num_elements*sizeof(int));
+	int * eb_quant_index_pos = eb_quant_index;
+	int * data_quant_index_pos = data_quant_index;
+	// next, row by row
+	const int base = 4;
+	const double log_of_base = log2(base);
+	const int capacity = 65536;
+	const int intv_radius = (capacity >> 1);
+
+	unpred_vec<T> unpred_data = unpred_vec<T>();
+	T * cur_U_pos = decompressed_U;
+	T * cur_V_pos = decompressed_V;
+	T * cur_W_pos = decompressed_W;
+
+	ptrdiff_t dim0_offset = r2 * r3;
+	ptrdiff_t dim1_offset = r3;
+	ptrdiff_t cell_dim0_offset = (r2-1) * (r3-1);
+	ptrdiff_t cell_dim1_offset = r3-1;
+	// offsets to get 24 adjacent simplex indices
+	// x -> z, high -> low
+	// current data would always be the last index, i.e. x[i][3]
+	int simplex_offset[24];
+	int index_offset[24][3][3];
+	int offset[24][3];
+	compute_offset(dim0_offset, dim1_offset, cell_dim0_offset, cell_dim1_offset, simplex_offset, index_offset, offset);
+
+	std::cout << "start cp checking\n";
+	std::cout << "max_abs_eb = " << max_abs_eb << std::endl;
+	vector<bool> cp_exist = compute_cp(U, V, W, r1, r2, r3);
+
+	double threshold = std::numeric_limits<double>::epsilon();
+	for(int i=0; i<r1; i++){
+		// printf("start %d row\n", i);
+		for(int j=0; j<r2; j++){
+			for(int k=0; k<r3; k++){
+				double required_eb = max_abs_eb;
+				// if((fabs(*cur_U_pos) < 1e-5) || (fabs(*cur_V_pos) < 1e-5) || (fabs(*cur_W_pos) < 1e-5)) required_eb = 0;
+				if((*cur_U_pos == 0) || (*cur_V_pos == 0) || (*cur_W_pos == 0)) required_eb = 0;
+				if(required_eb){
+					// derive eb given 24 adjacent simplex
+					for(int n=0; n<24; n++){
+						bool in_mesh = true;
+						for(int p=0; p<3; p++){
+							// reversed order!
+							if(!(in_range(i + index_offset[n][p][2], (int)r1) && in_range(j + index_offset[n][p][1], (int)r2) && in_range(k + index_offset[n][p][0], (int)r3))){
+								in_mesh = false;
+								break;
+							}
+						}
+						if(in_mesh){
+							int index = simplex_offset[n] + 6*(i*(r2-1)*(r3-1) + j*(r3-1) + k);
+							if(cp_exist[index]){
+								required_eb = 0;
+								break;
+							}
+							else{
+								// std::cout << required_eb << " " << max_abs_eb << std::endl;
+								required_eb = MIN(required_eb, max_eb_to_keep_position_and_type_3d_online_abs(
+									cur_U_pos[offset[n][0]], cur_U_pos[offset[n][1]], cur_U_pos[offset[n][2]], *cur_U_pos,
+									cur_V_pos[offset[n][0]], cur_V_pos[offset[n][1]], cur_V_pos[offset[n][2]], *cur_V_pos,
+									cur_W_pos[offset[n][0]], cur_W_pos[offset[n][1]], cur_W_pos[offset[n][2]], *cur_W_pos));
+							}
+						}
+					}					
+				}
+				if(required_eb){
+					bool unpred_flag = false;
+					T decompressed[3];
+					double abs_eb = required_eb;
+					*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+					if(*eb_quant_index_pos > 0){
+						// compress vector fields
+						T * data_pos[3] = {cur_U_pos, cur_V_pos, cur_W_pos};
+						for(int p=0; p<3; p++){
+							T * cur_data_pos = data_pos[p];
+							T cur_data = *cur_data_pos;
+							// get adjacent data and perform Lorenzo
+							/*
+								d6	X
+								d4	d5
+								d2	d3
+								d0	d1
+							*/
+							T d0 = (i && j && k) ? cur_data_pos[- dim0_offset - dim1_offset - 1] : 0;
+							T d1 = (i && j) ? cur_data_pos[- dim0_offset - dim1_offset] : 0;
+							T d2 = (i && k) ? cur_data_pos[- dim0_offset - 1] : 0;
+							T d3 = (i) ? cur_data_pos[- dim0_offset] : 0;
+							T d4 = (j && k) ? cur_data_pos[- dim1_offset - 1] : 0;
+							T d5 = (j) ? cur_data_pos[- dim1_offset] : 0;
+							T d6 = (k) ? cur_data_pos[- 1] : 0;
+							T pred = d0 + d3 + d5 + d6 - d1 - d2 - d4;
+							double diff = cur_data - pred;
+							double quant_diff = fabs(diff) / abs_eb + 1;
+							if(quant_diff < capacity){
+								quant_diff = (diff > 0) ? quant_diff : -quant_diff;
+								int quant_index = (int)(quant_diff/2) + intv_radius;
+								data_quant_index_pos[p] = quant_index;
+								decompressed[p] = pred + 2 * (quant_index - intv_radius) * abs_eb; 
+								// check original data
+								if(fabs(decompressed[p] - cur_data) >= abs_eb){
+									unpred_flag = true;
+									break;
+								}
+							}
+							else{
+								unpred_flag = true;
+								break;
+							}
+						}
+					}
+					else unpred_flag = true;
+					if(unpred_flag){
+						*(eb_quant_index_pos ++) = 0;
+						unpred_data.push_back(*cur_U_pos);
+						unpred_data.push_back(*cur_V_pos);
+						unpred_data.push_back(*cur_W_pos);
+					}
+					else{
+						eb_quant_index_pos ++;
+						data_quant_index_pos += 3;
+						*cur_U_pos = decompressed[0];
+						*cur_V_pos = decompressed[1];
+						*cur_W_pos = decompressed[2];
+					}
+				}
+				else{
+					// record as unpredictable data
+					*(eb_quant_index_pos ++) = 0;
+					unpred_data.push_back(*cur_U_pos);
+					unpred_data.push_back(*cur_V_pos);
+					unpred_data.push_back(*cur_W_pos);
+				}
+				cur_U_pos ++, cur_V_pos ++, cur_W_pos ++;
+			}
+		}
+	}	
+	free(decompressed_U);
+	free(decompressed_V);
+	free(decompressed_W);
+	printf("offsets eb_q, data_q, unpred: %ld %ld %ld\n", eb_quant_index_pos - eb_quant_index, data_quant_index_pos - data_quant_index, unpred_data.size());
+	unsigned char * compressed = (unsigned char *) malloc(3*num_elements*sizeof(T));
+	unsigned char * compressed_pos = compressed;
+	write_variable_to_dst(compressed_pos, base);
+	write_variable_to_dst(compressed_pos, threshold);
+	write_variable_to_dst(compressed_pos, intv_radius);
+	size_t data_quant_num = data_quant_index_pos - data_quant_index;
+	write_variable_to_dst(compressed_pos, data_quant_num);
+	size_t unpredictable_count = unpred_data.size();
+	write_variable_to_dst(compressed_pos, unpredictable_count);
+	printf("start of unpred data: pos = %ld\n", compressed_pos - compressed);
+	write_array_to_dst(compressed_pos, (T *)&unpred_data[0], unpredictable_count);	
+	printf("start eb decoding: pos = %ld\n", compressed_pos - compressed);
+	Huffman_encode_tree_and_data(2*1024, eb_quant_index, num_elements, compressed_pos);
+	free(eb_quant_index);
+	printf("start data decoding: pos = %ld\n", compressed_pos - compressed);
+	Huffman_encode_tree_and_data(2*capacity, data_quant_index, data_quant_num, compressed_pos);
+	printf("pos = %ld\n", compressed_pos - compressed);
+	free(data_quant_index);
+	compressed_size = compressed_pos - compressed;
+	return compressed;	
+}
+
+template
+unsigned char *
+sz_compress_cp_preserve_3d_online_abs(const float * U, const float * V, const float * W, size_t r1, size_t r2, size_t r3, size_t& compressed_size, double max_abs_eb);
+
+template
+unsigned char *
+sz_compress_cp_preserve_3d_online_abs(const double * U, const double * V, const double * W, size_t r1, size_t r2, size_t r3, size_t& compressed_size, double max_abs_eb);
 
 
 

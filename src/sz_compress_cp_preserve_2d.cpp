@@ -1539,7 +1539,7 @@ sz_compress_cp_preserve_2d_online_abs_relax_FN(const double * U, const double * 
 
 template <class T>
 inline double
-derive_eb(T * cur_U_pos, T * cur_V_pos, int i, int j, size_t r1, size_t r2, double eb, const int index_offset[6][2][2], const int offsets[7]){
+derive_eb_abs_online_2d(T * cur_U_pos, T * cur_V_pos, int i, int j, size_t r1, size_t r2, double eb, const int index_offset[6][2][2], const int offsets[7]){
 	// return eb;
 	double required_eb = eb;
 	for(int k=0; k<6; k++){
@@ -1571,7 +1571,7 @@ void sz3_cp_preserve_2d_predict_r1(T * U_pos, T * V_pos, size_t n, size_t stride
       for (size_t i = 1; i + 1 < n; i += 2) {
           T *dU = U_pos + i * stride;
           T *dV = V_pos + i * stride;
-					double abs_eb = derive_eb(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
+					double abs_eb = derive_eb_abs_online_2d(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
 					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_linear(*(dU - stride), *(dU + stride)), abs_eb);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_linear(*(dV - stride), *(dV + stride)), abs_eb);
@@ -1581,7 +1581,7 @@ void sz3_cp_preserve_2d_predict_r1(T * U_pos, T * V_pos, size_t n, size_t stride
           T *dU = U_pos + (n - 1) * stride;
           T *dV = V_pos + (n - 1) * stride;
           // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, *(d - stride), eb);
-					double abs_eb = derive_eb(dU, dV, j, (n - 1)*i_stride, r1, r2, eb, index_offset, offsets);
+					double abs_eb = derive_eb_abs_online_2d(dU, dV, j, (n - 1)*i_stride, r1, r2, eb, index_offset, offsets);
 					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, *(dU - stride), abs_eb);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, *(dV - stride), abs_eb);
@@ -1598,7 +1598,7 @@ void sz3_cp_preserve_2d_predict_r1(T * U_pos, T * V_pos, size_t n, size_t stride
       T *dU = U_pos + stride;
       T *dV = V_pos + stride;
       // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_quad_1(*(d - stride), *(d + stride), *(d + stride3x)), eb);
-			double abs_eb = derive_eb(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
+			double abs_eb = derive_eb_abs_online_2d(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
 			*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
       quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_quad_1(*(dU - stride), *(dU + stride), *(dU + stride3x)), abs_eb);
       quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_quad_1(*(dV - stride), *(dV + stride), *(dV + stride3x)), abs_eb);
@@ -1607,7 +1607,7 @@ void sz3_cp_preserve_2d_predict_r1(T * U_pos, T * V_pos, size_t n, size_t stride
 	        dU = U_pos + i * stride;
 	        dV = V_pos + i * stride;
           // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_cubic(*(d - stride3x), *(d - stride), *(d + stride), *(d + stride3x)), eb);
-					abs_eb = derive_eb(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
+					abs_eb = derive_eb_abs_online_2d(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
 					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
 		      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_cubic(*(dU - stride3x), *(dU - stride), *(dU + stride), *(dU + stride3x)), abs_eb);
 		      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_cubic(*(dV - stride3x), *(dV - stride), *(dV + stride), *(dV + stride3x)), abs_eb);
@@ -1616,7 +1616,7 @@ void sz3_cp_preserve_2d_predict_r1(T * U_pos, T * V_pos, size_t n, size_t stride
       dU = U_pos + i * stride;
       dV = V_pos + i * stride;
       // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_quad_2(*(d - stride3x), *(d - stride), *(d + stride)), eb);
-			abs_eb = derive_eb(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
+			abs_eb = derive_eb_abs_online_2d(dU, dV, j, i*i_stride, r1, r2, eb, index_offset, offsets);
 			*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
       quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_quad_2(*(dU - stride3x), *(dU - stride), *(dU + stride)), abs_eb);
       quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_quad_2(*(dV - stride3x), *(dV - stride), *(dV + stride)), abs_eb);
@@ -1624,7 +1624,7 @@ void sz3_cp_preserve_2d_predict_r1(T * U_pos, T * V_pos, size_t n, size_t stride
           dU = U_pos + (n - 1) * stride;
           dV = V_pos + (n - 1) * stride;
           // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, *(d - stride), eb);
-					abs_eb = derive_eb(dU, dV, j, (n - 1)*i_stride, r1, r2, eb, index_offset, offsets);
+					abs_eb = derive_eb_abs_online_2d(dU, dV, j, (n - 1)*i_stride, r1, r2, eb, index_offset, offsets);
 					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, *(dU - stride), abs_eb);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, *(dV - stride), abs_eb);
@@ -1643,7 +1643,7 @@ void sz3_cp_preserve_2d_predict_r2(T * U_pos, T * V_pos, size_t n, size_t stride
       for (size_t i = 1; i + 1 < n; i += 2) {
           T *dU = U_pos + i * stride;
           T *dV = V_pos + i * stride;
-					double abs_eb = derive_eb(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
+					double abs_eb = derive_eb_abs_online_2d(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
 					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_linear(*(dU - stride), *(dU + stride)), abs_eb);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_linear(*(dV - stride), *(dV + stride)), abs_eb);
@@ -1653,7 +1653,7 @@ void sz3_cp_preserve_2d_predict_r2(T * U_pos, T * V_pos, size_t n, size_t stride
           T *dU = U_pos + (n - 1) * stride;
           T *dV = V_pos + (n - 1) * stride;
           // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, *(d - stride), eb);
-					double abs_eb = derive_eb(dU, dV, (n - 1)*i_stride, j, r1, r2, eb, index_offset, offsets);
+					double abs_eb = derive_eb_abs_online_2d(dU, dV, (n - 1)*i_stride, j, r1, r2, eb, index_offset, offsets);
 					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, *(dU - stride), abs_eb);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, *(dV - stride), abs_eb);
@@ -1670,7 +1670,7 @@ void sz3_cp_preserve_2d_predict_r2(T * U_pos, T * V_pos, size_t n, size_t stride
       T *dU = U_pos + stride;
       T *dV = V_pos + stride;
       // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_quad_1(*(d - stride), *(d + stride), *(d + stride3x)), eb);
-			double abs_eb = derive_eb(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
+			double abs_eb = derive_eb_abs_online_2d(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
 			*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
       quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_quad_1(*(dU - stride), *(dU + stride), *(dU + stride3x)), abs_eb);
       quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_quad_1(*(dV - stride), *(dV + stride), *(dV + stride3x)), abs_eb);
@@ -1679,7 +1679,7 @@ void sz3_cp_preserve_2d_predict_r2(T * U_pos, T * V_pos, size_t n, size_t stride
 	        dU = U_pos + i * stride;
 	        dV = V_pos + i * stride;
           // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_cubic(*(d - stride3x), *(d - stride), *(d + stride), *(d + stride3x)), eb);
-					abs_eb = derive_eb(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
+					abs_eb = derive_eb_abs_online_2d(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
 					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
 		      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_cubic(*(dU - stride3x), *(dU - stride), *(dU + stride), *(dU + stride3x)), abs_eb);
 		      quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_cubic(*(dV - stride3x), *(dV - stride), *(dV + stride), *(dV + stride3x)), abs_eb);
@@ -1688,7 +1688,7 @@ void sz3_cp_preserve_2d_predict_r2(T * U_pos, T * V_pos, size_t n, size_t stride
       dU = U_pos + i * stride;
       dV = V_pos + i * stride;
       // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, interp_quad_2(*(d - stride3x), *(d - stride), *(d + stride)), eb);
-			abs_eb = derive_eb(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
+			abs_eb = derive_eb_abs_online_2d(dU, dV, i*i_stride, j, r1, r2, eb, index_offset, offsets);
 			*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
       quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, interp_quad_2(*(dU - stride3x), *(dU - stride), *(dU + stride)), abs_eb);
       quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, interp_quad_2(*(dV - stride3x), *(dV - stride), *(dV + stride)), abs_eb);
@@ -1696,7 +1696,7 @@ void sz3_cp_preserve_2d_predict_r2(T * U_pos, T * V_pos, size_t n, size_t stride
           dU = U_pos + (n - 1) * stride;
           dV = V_pos + (n - 1) * stride;
           // quantization[quant_count ++] = quantizer.quantize_and_overwrite(*d, *(d - stride), eb);
-					abs_eb = derive_eb(dU, dV, (n - 1)*i_stride, j, r1, r2, eb, index_offset, offsets);
+					abs_eb = derive_eb_abs_online_2d(dU, dV, (n - 1)*i_stride, j, r1, r2, eb, index_offset, offsets);
 					*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dU, *(dU - stride), abs_eb);
           quantization[quant_count ++] = quantizer.quantize_and_overwrite(*dV, *(dV - stride), abs_eb);
@@ -1763,7 +1763,7 @@ sz3_compress_cp_preserve_2d_online_abs(const T * U, const T * V, size_t r1, size
 	std::cout << r1 << " " << r2 << std::endl;
 	int quant_index = 0;
 	// quantize first data
-	double abs_eb = derive_eb(U_pos, V_pos, 0, 0, r1, r2, max_pwr_eb*0.5, index_offset, offsets);
+	double abs_eb = derive_eb_abs_online_2d(U_pos, V_pos, 0, 0, r1, r2, max_pwr_eb*0.5, index_offset, offsets);
 	*(eb_quant_index_pos++) = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
 	quantization[quant_index ++] = quantizer.quantize_and_overwrite(*U_pos, 0, abs_eb);
 	quantization[quant_index ++] = quantizer.quantize_and_overwrite(*V_pos, 0, abs_eb);
