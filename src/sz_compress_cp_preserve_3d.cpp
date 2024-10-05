@@ -1169,15 +1169,6 @@ max_eb_to_keep_position_and_type_3d_online_abs(const T u0, const T u1, const T u
 	// double u3_0 = - u3*v1*w2 + u3*v2*w1, u3_1 = - u3*v2*w0 + u3*v0*w2, u3_2 = - u3*v0*w1 + u3*v1*w0;
 	// double v3_0 = u1*v3*w2 - u2*v3*w1, v3_1 = u2*v3*w0 - u0*v3*w2, v3_2 = u0*v3*w1 - u1*v3*w0;
 	// double w3_0 = - u1*v2*w3 + u2*v1*w3, w3_1 = u0*v2*w3 - u2*v0*w3, w3_2 = - u0*v1*w3 + u1*v0*w3;
-	// double c_4 = u0*v1*w2 - u0*v2*w1 + u1*v2*w0 - u1*v0*w2 + u2*v0*w1 - u2*v1*w0;
-	// double M0 = u3_0 + v3_0 + w3_0;
-	// double M1 = u3_1 + v3_1 + w3_1;
-	// double M2 = u3_2 + v3_2 + w3_2;
-	// double M3 = c_4;
-
-	// double u3_0 = - u3*v1*w2 + u3*v2*w1, u3_1 = - u3*v2*w0 + u3*v0*w2, u3_2 = - u3*v0*w1 + u3*v1*w0;
-	// double v3_0 = u1*v3*w2 - u2*v3*w1, v3_1 = u2*v3*w0 - u0*v3*w2, v3_2 = u0*v3*w1 - u1*v3*w0;
-	// double w3_0 = - u1*v2*w3 + u2*v1*w3, w3_1 = u0*v2*w3 - u2*v0*w3, w3_2 = - u0*v1*w3 + u1*v0*w3;
 	double u3_0 = - v1*w2 + v2*w1, u3_1 = - v2*w0 + v0*w2, u3_2 = - v0*w1 + v1*w0;
 	double v3_0 = u1*w2 - u2*w1, v3_1 = u2*w0 - u0*w2, v3_2 = u0*w1 - u1*w0;
 	double w3_0 = - u1*v2 + u2*v1, w3_1 = u0*v2 - u2*v0, w3_2 = - u0*v1 + u1*v0;
@@ -1187,7 +1178,7 @@ max_eb_to_keep_position_and_type_3d_online_abs(const T u0, const T u1, const T u
 	double M2 = u3_2*u3 + v3_2*v3 + w3_2*w3;
 	double M3 = c_4;
 	double M = M0 + M1 + M2 + M3;
-	if(fabs(M) < 1e-10){
+	if(M == 0){
 		return 0;
 	}
 	bool flag[4];
@@ -1228,24 +1219,20 @@ max_eb_to_keep_position_and_type_3d_online_abs(const T u0, const T u1, const T u
 			cur_eb = MIN(max_eb_to_keep_sign_3d_online_abs(u3_0, v3_0, w3_0, M0), 
 					max_eb_to_keep_sign_3d_online_abs(u3_1 + u3_2, v3_1 + v3_2, w3_1 + w3_2, M1 + M2 + M3));
 			eb = MAX(eb, cur_eb);
-				// std::cout << cur_eb << "\n";
 		}
 		if(!flag[1]){
 			cur_eb = MIN(max_eb_to_keep_sign_3d_online_abs(u3_1, v3_1, w3_1, M1), 
 					max_eb_to_keep_sign_3d_online_abs(u3_0 + u3_2, v3_0 + v3_2, w3_0 + w3_2, M0 + M2 + M3));
 			eb = MAX(eb, cur_eb);
-				// std::cout << cur_eb << "\n";
 		}
 		if(!flag[2]){
 			cur_eb = MIN(max_eb_to_keep_sign_3d_online_abs(u3_2, v3_2, w3_2, M2), 
 					max_eb_to_keep_sign_3d_online_abs(u3_0 + u3_1, v3_0 + v3_1, w3_0 + w3_1, M0 + M1 + M3));
 			eb = MAX(eb, cur_eb);
-				// std::cout << cur_eb << "\n";
 		}
 		if(!flag[3]){
 			cur_eb = max_eb_to_keep_sign_3d_online_abs(u3_0 + u3_1 + u3_2, v3_0 + v3_1 + v3_2, w3_0 + w3_1 + w3_2, M0 + M1 + M2);
 			eb = MAX(eb, cur_eb);
-				// std::cout << cur_eb << "\n";
 		}
 		return eb;
 	}
@@ -1362,7 +1349,6 @@ sz_compress_cp_preserve_3d_online_abs(const T * U, const T * V, const T * W, siz
 		for(int j=0; j<r2; j++){
 			for(int k=0; k<r3; k++){
 				double required_eb = max_abs_eb;
-				// if((fabs(*cur_U_pos) < 1e-5) || (fabs(*cur_V_pos) < 1e-5) || (fabs(*cur_W_pos) < 1e-5)) required_eb = 0;
 				if((*cur_U_pos == 0) || (*cur_V_pos == 0) || (*cur_W_pos == 0)) required_eb = 0;
 				if(required_eb){
 					// derive eb given 24 adjacent simplex
