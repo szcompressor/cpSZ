@@ -286,14 +286,14 @@ int main(int argc, char **argv)
   std::cout << "FP = " << fp.size() << std::endl;
   std::cout << "FN = " << fn.size() << std::endl;
   std::cout << "FT = " << ft.size() << std::endl;
-  // {
-  // if(!cp_file) record_criticalpoints(cp_prefix, origin, true);    
-  // std::string prefix = std::string(argv[7]);
-  // if(m.size()) record_criticalpoints(prefix+"_M", m);    
-  // if(fp.size()) record_criticalpoints(prefix+"_FP", fp);    
-  // if(fn.size()) record_criticalpoints(prefix+"_FN", fn);    
-  // if(ft.size()) record_criticalpoints(prefix+"_FT", ft);    
-  // }
+  {
+    if(!cp_file) record_criticalpoints(cp_prefix, origin, true);    
+    std::string prefix = std::string(argv[7]);
+    if(m.size()) record_criticalpoints(prefix+"_M", m);    
+    if(fp.size()) record_criticalpoints(prefix+"_FP", fp);    
+    if(fn.size()) record_criticalpoints(prefix+"_FN", fn);    
+    if(ft.size()) record_criticalpoints(prefix+"_FT", ft);    
+  }
   free(u);
   free(v);
   free(w);

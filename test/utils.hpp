@@ -105,4 +105,9 @@ void verify(Type * ori_data, Type * data, size_t num_elements){
     printf ("acEff=%f\n", acEff);   
 }
 
+inline bool file_exists(const std::string& filename) {
+    std::ifstream f(filename.c_str());
+    return f.good();
+}
+
 #endif

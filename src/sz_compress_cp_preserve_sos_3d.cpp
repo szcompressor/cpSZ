@@ -903,6 +903,513 @@ sz_compress_cp_preserve_sos_3d_online_fp(const T_data * U, const T_data * V, con
 	return compressed;	
 }
 
+template<typename T_data>
+unsigned char *
+sz_compress_cp_preserve_sos_3d_online_fp_decomposed(const T_data * U, const T_data * V, const T_data * W, size_t r1, size_t r2, size_t r3, size_t& compressed_size, bool transpose, double max_pwr_eb){
+	std::cout << "sz_compress_cp_preserve_sos_3d_online_fp" << std::endl;
+	using T = int64_t;
+	size_t num_elements = r1 * r2 * r3;
+	T * U_fp = (T *) malloc(num_elements*sizeof(T));
+	T * V_fp = (T *) malloc(num_elements*sizeof(T));
+	T * W_fp = (T *) malloc(num_elements*sizeof(T));
+	T range = 0;
+	T vector_field_scaling_factor = convert_to_fixed_point(U, V, W, num_elements, U_fp, V_fp, W_fp, range);
+	printf("fixed point range = %lld\n", range);
+	int * eb_quant_index = (int *) malloc(num_elements*sizeof(int));
+	int * data_quant_index = (int *) malloc(3*num_elements*sizeof(int));
+	int * eb_quant_index_pos = eb_quant_index;
+	int * data_quant_index_pos = data_quant_index;
+	// next, row by row
+	const int base = 2;
+	const double log_of_base = log2(base);
+	const int capacity = 65536;
+	const int intv_radius = (capacity >> 1);
+	T max_eb = range * max_pwr_eb;
+	unpred_vec<T_data> unpred_data;
+	ptrdiff_t dim0_offset = r2 * r3;
+	ptrdiff_t dim1_offset = r3;
+	ptrdiff_t cell_dim0_offset = (r2-1) * (r3-1);
+	ptrdiff_t cell_dim1_offset = r3-1;
+	int simplex_offset[24];
+	int index_offset[24][3][3];
+	int offset[24][3];
+	compute_offset(dim0_offset, dim1_offset, cell_dim0_offset, cell_dim1_offset, simplex_offset, index_offset, offset);
+	T * cur_U_pos = U_fp;
+	T * cur_V_pos = V_fp;
+	T * cur_W_pos = W_fp;
+	T threshold = 1;
+	// check cp for all cells
+	std::cout << "start cp checking\n";
+	vector<bool> cp_exist = compute_cp(U_fp, V_fp, W_fp, r1, r2, r3);
+	// bool top = 0, bottom = 0, left = 0, right = 0, front = 0, back = 0;
+	// compress (r1-1)(r2-1)(r3-1) cube in (r1+2)(r2+2)(r3+2) cube
+	// size_t r1_ext = r1 + (!top) + (!bottom);
+	// size_t r2_ext = r2 + (!left) + (!right);
+	// size_t r3_ext = r3 + (!front) + (!back);
+	// size_t dim0_offset_ext = r2_ext * r3_ext;
+	// size_t dim1_offset_ext = r3_ext;
+	// // offset (1+(!bottom), 1+(!left), 1+(!front))
+	// ptrdiff_t start_offset = (1+(!bottom))*dim0_offset_ext + (1+(!left))*dim1_offset_ext + 1+(!front);
+	// T * cur_U_pos = U_fp + start_offset;
+	// T * cur_V_pos = V_fp + start_offset;
+	// T * cur_W_pos = W_fp + start_offset;
+	std::cout << "start compression\n";
+	// compress corner cube (r1-1)*(r2-1)*(r3-1)
+	std::cout << "compress cube\n";
+	cur_U_pos = U_fp, cur_V_pos = V_fp, cur_W_pos = W_fp;
+	for(int i=0; i<r1-1; i++){
+		for(int j=0; j<r2-1; j++){
+			for(int k=0; k<r3-1; k++){
+				T required_eb = max_eb;
+				if(((i==0) && (j==0)) || ((i==0) && (k==0)) || ((j==0) && (k==0))){
+					// set eb for edges to 0
+					required_eb = 0;
+				}
+				else{
+					// derive eb given 24 adjacent simplex
+					for(int n=0; n<24; n++){
+						bool in_mesh = true;
+						for(int p=0; p<3; p++){
+							// reversed order!
+							// TODO: adjust for parallelization
+							if(!(in_range(i + index_offset[n][p][2], (int)r1) && in_range(j + index_offset[n][p][1], (int)r2) && in_range(k + index_offset[n][p][0], (int)r3))){
+								in_mesh = false;
+								break;
+							}
+						}
+						if(in_mesh){
+							int index = simplex_offset[n] + 6*(i*(r2-1)*(r3-1) + j*(r3-1) + k);
+							if(cp_exist[index]){
+								required_eb = 0;
+								break;
+							}
+							required_eb = MINF(required_eb, derive_cp_abs_eb_sos_online(
+								cur_U_pos[offset[n][0]], cur_U_pos[offset[n][1]], cur_U_pos[offset[n][2]], *cur_U_pos,
+								cur_V_pos[offset[n][0]], cur_V_pos[offset[n][1]], cur_V_pos[offset[n][2]], *cur_V_pos,
+								cur_W_pos[offset[n][0]], cur_W_pos[offset[n][1]], cur_W_pos[offset[n][2]], *cur_W_pos));
+						}
+					}			
+				}
+				T abs_eb = required_eb;
+				*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+				if(abs_eb > 0){
+					bool unpred_flag = false;
+					T decompressed[3];
+					// compress vector fields
+					T * data_pos[3] = {cur_U_pos, cur_V_pos, cur_W_pos};
+					for(int p=0; p<3; p++){
+						T * cur_data_pos = data_pos[p];
+						T cur_data = *cur_data_pos;
+						// get adjacent data and perform Lorenzo
+						/*
+							d6	X
+							d4	d5
+							d2	d3
+							d0	d1
+						*/
+						T d0 = (i && j && k) ? cur_data_pos[- dim0_offset - dim1_offset - 1] : 0;
+						T d1 = (i && j) ? cur_data_pos[- dim0_offset - dim1_offset] : 0;
+						T d2 = (i && k) ? cur_data_pos[- dim0_offset - 1] : 0;
+						T d3 = (i) ? cur_data_pos[- dim0_offset] : 0;
+						T d4 = (j && k) ? cur_data_pos[- dim1_offset - 1] : 0;
+						T d5 = (j) ? cur_data_pos[- dim1_offset] : 0;
+						T d6 = (k) ? cur_data_pos[- 1] : 0;
+						T pred = d0 + d3 + d5 + d6 - d1 - d2 - d4;
+						T diff = cur_data - pred;
+						T quant_diff = std::abs(diff) / abs_eb + 1;
+						if(quant_diff < capacity){
+							quant_diff = (diff > 0) ? quant_diff : -quant_diff;
+							int quant_index = (int)(quant_diff/2) + intv_radius;
+							data_quant_index_pos[p] = quant_index;
+							decompressed[p] = pred + 2 * (quant_index - intv_radius) * abs_eb; 
+							// check original data
+							if(std::abs(decompressed[p] - cur_data) >= required_eb){
+								unpred_flag = true;
+								break;
+							}
+						}
+						else{
+							unpred_flag = true;
+							break;
+						}
+					}
+					if(unpred_flag){
+						*(eb_quant_index_pos ++) = 0;
+						ptrdiff_t offset = cur_U_pos - U_fp;
+						unpred_data.push_back(U[offset]);
+						unpred_data.push_back(V[offset]);
+						unpred_data.push_back(W[offset]);
+					}
+					else{
+						eb_quant_index_pos ++;
+						data_quant_index_pos += 3;
+						*cur_U_pos = decompressed[0];
+						*cur_V_pos = decompressed[1];
+						*cur_W_pos = decompressed[2];
+					}
+				}
+				else{
+					// record as unpredictable data
+					*(eb_quant_index_pos ++) = 0;
+					ptrdiff_t offset = cur_U_pos - U_fp;
+					unpred_data.push_back(U[offset]);
+					unpred_data.push_back(V[offset]);
+					unpred_data.push_back(W[offset]);
+				}
+				cur_U_pos ++, cur_V_pos ++, cur_W_pos ++;
+			}
+			// skip the last element
+			// TODO: adjust for parallelization
+			cur_U_pos ++, cur_V_pos ++, cur_W_pos ++;
+		}
+		// skip the last line
+		// TODO: adjust for parallelization
+		cur_U_pos += dim1_offset, cur_V_pos += dim1_offset, cur_W_pos += dim1_offset;
+	}
+	// compress top surface (r2-1)*(r3-1)
+	{
+		std::cout << "compress top\n";
+		int i = r1 - 1;
+		for(int j=0; j<r2-1; j++){
+			cur_U_pos = U_fp + i*dim0_offset + j*dim1_offset, cur_V_pos = V_fp + i*dim0_offset + j*dim1_offset, cur_W_pos = W_fp + i*dim0_offset + j*dim1_offset;
+			for(int k=0; k<r3-1; k++){
+				T required_eb = max_eb;
+				if((j==0) || (k==0)){
+					// set eb for edges to 0
+					required_eb = 0;
+				}
+				else{
+					// derive eb given 24 adjacent simplex
+					for(int n=0; n<24; n++){
+						bool in_mesh = true;
+						for(int p=0; p<3; p++){
+							// reversed order!
+							if(!(in_range(i + index_offset[n][p][2], (int)r1) && in_range(j + index_offset[n][p][1], (int)r2) && in_range(k + index_offset[n][p][0], (int)r3))){
+								in_mesh = false;
+								break;
+							}
+						}
+						if(in_mesh){
+							int index = simplex_offset[n] + 6*(i*(r2-1)*(r3-1) + j*(r3-1) + k);
+							if(cp_exist[index]){
+								required_eb = 0;
+								break;
+							}
+							required_eb = MINF(required_eb, derive_cp_abs_eb_sos_online(
+								cur_U_pos[offset[n][0]], cur_U_pos[offset[n][1]], cur_U_pos[offset[n][2]], *cur_U_pos,
+								cur_V_pos[offset[n][0]], cur_V_pos[offset[n][1]], cur_V_pos[offset[n][2]], *cur_V_pos,
+								cur_W_pos[offset[n][0]], cur_W_pos[offset[n][1]], cur_W_pos[offset[n][2]], *cur_W_pos));
+						}
+					}			
+				}
+				T abs_eb = required_eb;
+				*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+				if(abs_eb > 0){
+					bool unpred_flag = false;
+					T decompressed[3];
+					// compress vector fields
+					T * data_pos[3] = {cur_U_pos, cur_V_pos, cur_W_pos};
+					for(int p=0; p<3; p++){
+						T * cur_data_pos = data_pos[p];
+						T cur_data = *cur_data_pos;
+						// get adjacent data and perform Lorenzo
+						/*
+							d6	X
+							d4	d5
+							d2	d3
+							d0	d1
+						*/
+						T d0 = cur_data_pos[- dim0_offset - dim1_offset - 1];
+						T d1 = cur_data_pos[- dim0_offset - dim1_offset];
+						T d2 = cur_data_pos[- dim0_offset - 1];
+						T d3 = cur_data_pos[- dim0_offset];
+						T d4 = cur_data_pos[- dim1_offset - 1];
+						T d5 = cur_data_pos[- dim1_offset];
+						T d6 = cur_data_pos[- 1];
+						T pred = d0 + d3 + d5 + d6 - d1 - d2 - d4;
+						T diff = cur_data - pred;
+						T quant_diff = std::abs(diff) / abs_eb + 1;
+						if(quant_diff < capacity){
+							quant_diff = (diff > 0) ? quant_diff : -quant_diff;
+							int quant_index = (int)(quant_diff/2) + intv_radius;
+							data_quant_index_pos[p] = quant_index;
+							decompressed[p] = pred + 2 * (quant_index - intv_radius) * abs_eb; 
+							// check original data
+							if(std::abs(decompressed[p] - cur_data) >= required_eb){
+								unpred_flag = true;
+								break;
+							}
+						}
+						else{
+							unpred_flag = true;
+							break;
+						}
+					}
+					if(unpred_flag){
+						*(eb_quant_index_pos ++) = 0;
+						ptrdiff_t offset = cur_U_pos - U_fp;
+						unpred_data.push_back(U[offset]);
+						unpred_data.push_back(V[offset]);
+						unpred_data.push_back(W[offset]);
+					}
+					else{
+						eb_quant_index_pos ++;
+						data_quant_index_pos += 3;
+						*cur_U_pos = decompressed[0];
+						*cur_V_pos = decompressed[1];
+						*cur_W_pos = decompressed[2];
+					}
+				}
+				else{
+					// record as unpredictable data
+					*(eb_quant_index_pos ++) = 0;
+					ptrdiff_t offset = cur_U_pos - U_fp;
+					unpred_data.push_back(U[offset]);
+					unpred_data.push_back(V[offset]);
+					unpred_data.push_back(W[offset]);
+				}
+				cur_U_pos ++, cur_V_pos ++, cur_W_pos ++;
+			}
+		}
+	}
+	// compress right surface r1*(r2-1)
+	{
+		std::cout << "compress right\n";
+		int k = r3-1;
+		for(int i=0; i<r1; i++){
+			cur_U_pos = U_fp + i*dim0_offset + k, cur_V_pos = V_fp + i*dim0_offset + k, cur_W_pos = W_fp + i*dim0_offset + k;
+			for(int j=0; j<r2-1; j++){
+				T required_eb = max_eb;
+				if((i == 0) || (i == r1-1) || (j == 0)){
+					// set eb for edges to 0
+					required_eb = 0;
+				}
+				else{
+					// derive eb given 24 adjacent simplex
+					for(int n=0; n<24; n++){
+						bool in_mesh = true;
+						for(int p=0; p<3; p++){
+							// reversed order!
+							if(!(in_range(i + index_offset[n][p][2], (int)r1) && in_range(j + index_offset[n][p][1], (int)r2) && in_range(k + index_offset[n][p][0], (int)r3))){
+								in_mesh = false;
+								break;
+							}
+						}
+						if(in_mesh){
+							int index = simplex_offset[n] + 6*(i*(r2-1)*(r3-1) + j*(r3-1) + k);
+							if(cp_exist[index]){
+								required_eb = 0;
+								break;
+							}
+							required_eb = MINF(required_eb, derive_cp_abs_eb_sos_online(
+								cur_U_pos[offset[n][0]], cur_U_pos[offset[n][1]], cur_U_pos[offset[n][2]], *cur_U_pos,
+								cur_V_pos[offset[n][0]], cur_V_pos[offset[n][1]], cur_V_pos[offset[n][2]], *cur_V_pos,
+								cur_W_pos[offset[n][0]], cur_W_pos[offset[n][1]], cur_W_pos[offset[n][2]], *cur_W_pos));
+						}
+					}			
+				}
+				T abs_eb = required_eb;
+				*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+				if(abs_eb > 0){
+					bool unpred_flag = false;
+					T decompressed[3];
+					// compress vector fields
+					T * data_pos[3] = {cur_U_pos, cur_V_pos, cur_W_pos};
+					for(int p=0; p<3; p++){
+						T * cur_data_pos = data_pos[p];
+						T cur_data = *cur_data_pos;
+						// get adjacent data and perform Lorenzo
+						/*
+							d6	X
+							d4	d5
+							d2	d3
+							d0	d1
+						*/
+						T d0 = cur_data_pos[- dim0_offset - dim1_offset - 1];
+						T d1 = cur_data_pos[- dim0_offset - dim1_offset];
+						T d2 = cur_data_pos[- dim0_offset - 1];
+						T d3 = cur_data_pos[- dim0_offset];
+						T d4 = cur_data_pos[- dim1_offset - 1];
+						T d5 = cur_data_pos[- dim1_offset];
+						T d6 = cur_data_pos[- 1];
+						T pred = d0 + d3 + d5 + d6 - d1 - d2 - d4;
+						T diff = cur_data - pred;
+						T quant_diff = std::abs(diff) / abs_eb + 1;
+						if(quant_diff < capacity){
+							quant_diff = (diff > 0) ? quant_diff : -quant_diff;
+							int quant_index = (int)(quant_diff/2) + intv_radius;
+							data_quant_index_pos[p] = quant_index;
+							decompressed[p] = pred + 2 * (quant_index - intv_radius) * abs_eb; 
+							// check original data
+							if(std::abs(decompressed[p] - cur_data) >= required_eb){
+								unpred_flag = true;
+								break;
+							}
+						}
+						else{
+							unpred_flag = true;
+							break;
+						}
+					}
+					if(unpred_flag){
+						*(eb_quant_index_pos ++) = 0;
+						ptrdiff_t offset = cur_U_pos - U_fp;
+						unpred_data.push_back(U[offset]);
+						unpred_data.push_back(V[offset]);
+						unpred_data.push_back(W[offset]);
+					}
+					else{
+						eb_quant_index_pos ++;
+						data_quant_index_pos += 3;
+						*cur_U_pos = decompressed[0];
+						*cur_V_pos = decompressed[1];
+						*cur_W_pos = decompressed[2];
+					}
+				}
+				else{
+					// record as unpredictable data
+					*(eb_quant_index_pos ++) = 0;
+					ptrdiff_t offset = cur_U_pos - U_fp;
+					unpred_data.push_back(U[offset]);
+					unpred_data.push_back(V[offset]);
+					unpred_data.push_back(W[offset]);
+				}
+				cur_U_pos += dim1_offset, cur_V_pos += dim1_offset, cur_W_pos += dim1_offset;
+			}
+		}		
+	}
+	// compress back surface r1*r3
+	{
+		std::cout << "compress back\n";
+		int j = r2-1;
+		for(int i=0; i<r1; i++){
+			cur_U_pos = U_fp + i*dim0_offset + j*dim1_offset, cur_V_pos = V_fp + i*dim0_offset + j*dim1_offset, cur_W_pos = W_fp + i*dim0_offset + j*dim1_offset;
+			for(int k=0; k<r3; k++){
+				T required_eb = max_eb;
+				if((i == 0) || (i == r1-1) || (k == 0) || (k==r3-1)){
+					// set eb for edges to 0
+					required_eb = 0;
+				}
+				else{
+					// derive eb given 24 adjacent simplex
+					for(int n=0; n<24; n++){
+						bool in_mesh = true;
+						for(int p=0; p<3; p++){
+							// reversed order!
+							if(!(in_range(i + index_offset[n][p][2], (int)r1) && in_range(j + index_offset[n][p][1], (int)r2) && in_range(k + index_offset[n][p][0], (int)r3))){
+								in_mesh = false;
+								break;
+							}
+						}
+						if(in_mesh){
+							int index = simplex_offset[n] + 6*(i*(r2-1)*(r3-1) + j*(r3-1) + k);
+							if(cp_exist[index]){
+								required_eb = 0;
+								break;
+							}
+							required_eb = MINF(required_eb, derive_cp_abs_eb_sos_online(
+								cur_U_pos[offset[n][0]], cur_U_pos[offset[n][1]], cur_U_pos[offset[n][2]], *cur_U_pos,
+								cur_V_pos[offset[n][0]], cur_V_pos[offset[n][1]], cur_V_pos[offset[n][2]], *cur_V_pos,
+								cur_W_pos[offset[n][0]], cur_W_pos[offset[n][1]], cur_W_pos[offset[n][2]], *cur_W_pos));
+						}
+					}			
+				}
+				T abs_eb = required_eb;
+				*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
+				if(abs_eb > 0){
+					bool unpred_flag = false;
+					T decompressed[3];
+					// compress vector fields
+					T * data_pos[3] = {cur_U_pos, cur_V_pos, cur_W_pos};
+					for(int p=0; p<3; p++){
+						T * cur_data_pos = data_pos[p];
+						T cur_data = *cur_data_pos;
+						// get adjacent data and perform Lorenzo
+						/*
+							d6	X
+							d4	d5
+							d2	d3
+							d0	d1
+						*/
+						T d0 = cur_data_pos[- dim0_offset - dim1_offset - 1];
+						T d1 = cur_data_pos[- dim0_offset - dim1_offset];
+						T d2 = cur_data_pos[- dim0_offset - 1];
+						T d3 = cur_data_pos[- dim0_offset];
+						T d4 = cur_data_pos[- dim1_offset - 1];
+						T d5 = cur_data_pos[- dim1_offset];
+						T d6 = cur_data_pos[- 1];
+						T pred = d0 + d3 + d5 + d6 - d1 - d2 - d4;
+						T diff = cur_data - pred;
+						T quant_diff = std::abs(diff) / abs_eb + 1;
+						if(quant_diff < capacity){
+							quant_diff = (diff > 0) ? quant_diff : -quant_diff;
+							int quant_index = (int)(quant_diff/2) + intv_radius;
+							data_quant_index_pos[p] = quant_index;
+							decompressed[p] = pred + 2 * (quant_index - intv_radius) * abs_eb; 
+							// check original data
+							if(std::abs(decompressed[p] - cur_data) >= required_eb){
+								unpred_flag = true;
+								break;
+							}
+						}
+						else{
+							unpred_flag = true;
+							break;
+						}
+					}
+					if(unpred_flag){
+						*(eb_quant_index_pos ++) = 0;
+						ptrdiff_t offset = cur_U_pos - U_fp;
+						unpred_data.push_back(U[offset]);
+						unpred_data.push_back(V[offset]);
+						unpred_data.push_back(W[offset]);
+					}
+					else{
+						eb_quant_index_pos ++;
+						data_quant_index_pos += 3;
+						*cur_U_pos = decompressed[0];
+						*cur_V_pos = decompressed[1];
+						*cur_W_pos = decompressed[2];
+					}
+				}
+				else{
+					// record as unpredictable data
+					*(eb_quant_index_pos ++) = 0;
+					ptrdiff_t offset = cur_U_pos - U_fp;
+					unpred_data.push_back(U[offset]);
+					unpred_data.push_back(V[offset]);
+					unpred_data.push_back(W[offset]);
+				}
+				cur_U_pos ++, cur_V_pos ++, cur_W_pos ++;
+			}
+		}		
+	}
+	free(U_fp);
+	free(V_fp);
+	free(W_fp);
+	printf("offset eb_q, data_q, unpred: %ld %ld %ld\n", eb_quant_index_pos - eb_quant_index, data_quant_index_pos - data_quant_index, unpred_data.size());
+	unsigned char * compressed = (unsigned char *) malloc(3*num_elements*sizeof(T));
+	unsigned char * compressed_pos = compressed;
+	write_variable_to_dst(compressed_pos, vector_field_scaling_factor);
+	write_variable_to_dst(compressed_pos, base);
+	write_variable_to_dst(compressed_pos, threshold);
+	write_variable_to_dst(compressed_pos, intv_radius);
+	size_t unpredictable_count = unpred_data.size();
+	write_variable_to_dst(compressed_pos, unpredictable_count);
+	write_array_to_dst(compressed_pos, (T_data *)&unpred_data[0], unpredictable_count);	
+	size_t eb_quant_num = eb_quant_index_pos - eb_quant_index;
+	write_variable_to_dst(compressed_pos, eb_quant_num);
+	Huffman_encode_tree_and_data(2*1024, eb_quant_index, eb_quant_num, compressed_pos);
+	free(eb_quant_index);
+	size_t data_quant_num = data_quant_index_pos - data_quant_index;
+	write_variable_to_dst(compressed_pos, data_quant_num);
+	Huffman_encode_tree_and_data(2*capacity, data_quant_index, data_quant_num, compressed_pos);
+	printf("pos = %ld\n", compressed_pos - compressed);
+	free(data_quant_index);
+	compressed_size = compressed_pos - compressed;
+	return compressed;	
+}
+
 template
 unsigned char *
 sz_compress_cp_preserve_sos_3d_online_fp(const float * U, const float * V, const float * W, size_t r1, size_t r2, size_t r3, size_t& compressed_size, bool transpose, double max_pwr_eb);

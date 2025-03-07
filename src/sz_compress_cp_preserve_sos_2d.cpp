@@ -860,22 +860,28 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_fn(const T_data * U, const T_
 			T abs_eb = max_eb;
 			bool unpred_flag = false;
 			bool verification_flag = false;
-			// check if cp exists in adjacent cells
-			for(int k=0; k<6; k++){
-				bool in_mesh = true;
-				for(int p=0; p<2; p++){
-					// reserved order!
-					if(!(in_range(i + index_offset[k][p][1], (int)r1) && in_range(j + index_offset[k][p][0], (int)r2))){
-						in_mesh = false;
-						break;
+			if((*cur_U_pos == 0) && (*cur_V_pos == 0)){
+				verification_flag = true;
+				unpred_flag = true;
+			}
+			else{
+				// check if cp exists in adjacent cells
+				for(int k=0; k<6; k++){
+					bool in_mesh = true;
+					for(int p=0; p<2; p++){
+						// reserved order!
+						if(!(in_range(i + index_offset[k][p][1], (int)r1) && in_range(j + index_offset[k][p][0], (int)r2))){
+							in_mesh = false;
+							break;
+						}
 					}
-				}
-				if(in_mesh){
-					bool original_has_cp = cp_exist[2*(i*(r2-1) + j) + cell_offset[k]];
-					if(original_has_cp){
-						unpred_flag = true;
-						verification_flag = true;
-						break;
+					if(in_mesh){
+						bool original_has_cp = cp_exist[2*(i*(r2-1) + j) + cell_offset[k]];
+						if(original_has_cp){
+							unpred_flag = true;
+							verification_flag = true;
+							break;
+						}
 					}
 				}
 			}
@@ -1090,6 +1096,10 @@ sz_compress_cp_preserve_sos_2d_online_fp_spec_exec_all(const T_data * U, const T
 			bool unpred_flag = false;
 			bool verification_flag = false;
 			T decompressed[2];
+			if((*cur_U_pos == 0) && (*cur_V_pos == 0)){
+				verification_flag = true;
+				unpred_flag = true;
+			}
 			// compress data and then verify
 			while(!verification_flag){
 				*eb_quant_index_pos = eb_exponential_quantize(abs_eb, base, log_of_base, threshold);
